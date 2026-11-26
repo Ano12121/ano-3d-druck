@@ -133,8 +133,15 @@ export default function App() {
   useEffect(() => {
     loadData();
 
-    // Handle Stripe redirect return
+    // Handle direct ?track=ANO-2026-XXXX shareable link
     const params = new URLSearchParams(window.location.search);
+    const trackParam = params.get('track');
+    if (trackParam) {
+      setTrackerCode(trackParam.trim().toUpperCase());
+      setTrackerOpen(true);
+    }
+
+    // Handle Stripe redirect return
     if (params.get('stripe_success') === '1' && params.get('order_id')) {
       const orderId = params.get('order_id');
       const sessionId = params.get('session_id');

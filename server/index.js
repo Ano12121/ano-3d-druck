@@ -713,6 +713,7 @@ app.get('/api/orders/:id', async (req, res) => {
   res.json({
     id: order.id,
     status: order.status,
+    progress: Number(order.progress ?? 0),
     paymentStatus: order.paymentStatus || 'ausstehend',
     paymentMethod: order.paymentMethod,
     createdAt: order.createdAt,
@@ -785,6 +786,7 @@ app.post('/api/orders', async (req, res) => {
     shipping,
     total,
     status: 'neu',
+    progress: 0,
     createdAt: new Date().toISOString(),
   };
 
@@ -819,8 +821,22 @@ app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
   if (req.body.paymentStatus) {
     order.paymentStatus = req.body.paymentStatus;
   }
+  if (req.body.progress !== undefined) {
+    order.progress = Math.max(0, Math.min(100, Math.round(Number(req.body.progress) || 0)));
+  }
   await writeStore(store);
   res.json(order);
+});
+
+app.delete('/api/orders/:id', requireAdmin, async (req, res) => {
+  const store = req._store;
+  const idx = store.orders.findIndex((o) => o.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: 'Bestellung nicht gefunden.' });
+  }
+  const [removed] = store.orders.splice(idx, 1);
+  await writeStore(store);
+  res.json({ deleted: removed.id });
 });
 
 // ===================== CUSTOM PRINT INQUIRIES =====================

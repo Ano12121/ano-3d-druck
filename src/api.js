@@ -135,6 +135,14 @@ export async function updateOrderStatus(orderId, payload) {
   return handleResponse(res);
 }
 
+export async function deleteOrder(orderId) {
+  const res = await fetch(`${API_BASE}/orders/${encodeURIComponent(orderId)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  return handleResponse(res);
+}
+
 export async function createInquiry(formData) {
   const res = await fetch(`${API_BASE}/inquiries`, {
     method: 'POST',

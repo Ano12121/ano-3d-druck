@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Search, CheckCircle2, Circle, PackageSearch } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Search, CheckCircle2, Circle, PackageSearch, RefreshCw } from 'lucide-react';
 import { ORDER_STEPS, formatEUR } from '../data/filaments';
 import { lookupOrder } from '../api';
 
@@ -9,34 +9,49 @@ export default function OrderTrackerModal({ open, initialCode, onClose }) {
   const [error, setError] = useState('');
   const [order, setOrder] = useState(null);
 
-  const runLookup = async (targetCode) => {
+  const runLookup = useCallback(async (targetCode, silent = false) => {
     const clean = (targetCode || '').trim();
     if (!clean) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError('');
     try {
       const data = await lookupOrder(clean);
       setOrder(data);
     } catch (err) {
-      setOrder(null);
-      setError(err.message || 'Bestellung nicht gefunden.');
+      if (!silent) {
+        setOrder(null);
+        setError(err.message || 'Bestellung nicht gefunden.');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (open && initialCode) {
       setCode(initialCode);
       runLookup(initialCode);
     }
-  }, [open, initialCode]);
+  }, [open, initialCode, runLookup]);
+
+  // Live auto-refresh every 8 seconds while watching an order
+  useEffect(() => {
+    if (!open || !order?.id) return;
+    const timer = setInterval(() => {
+      runLookup(order.id, true);
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [open, order?.id, runLookup]);
 
   if (!open) return null;
 
   const currentIdx = order
     ? ORDER_STEPS.findIndex((s) => s.key === order.status)
     : -1;
+  const progress =
+    order?.status === 'finish' || order?.status === 'versendet'
+      ? 100
+      : Math.max(0, Math.min(100, Number(order?.progress ?? 0)));
 
   return (
     <div
@@ -44,14 +59,14 @@ export default function OrderTrackerModal({ open, initialCode, onClose }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl rounded-2xl bg-[#111318] border border-white/[0.12] shadow-2xl overflow-hidden"
+        className="w-full max-w-xl rounded-2xl bg-[#111318] border border-white/[0.12] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-4 bg-[#0C0E13] border-b border-white/[0.08] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <PackageSearch className="w-5 h-5 text-[#38BDF8]" />
             <h2 className="font-display text-lg font-bold text-white">
-              Live 3D-Druck Status tracken
+              Live 3D-Druck Status
             </h2>
           </div>
           <button
@@ -62,7 +77,7 @@ export default function OrderTrackerModal({ open, initialCode, onClose }) {
           </button>
         </div>
 
-        <div className="p-5 sm:p-6 space-y-5">
+        <div className="p-5 sm:p-6 space-y-5 overflow-y-auto">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -86,9 +101,11 @@ export default function OrderTrackerModal({ open, initialCode, onClose }) {
             </button>
           </form>
 
-          <p className="text-xs text-[#8E95A5]">
-            Gib einfach deinen Bestell-Code (z. B. <span className="font-mono text-white">ANO-2026-…</span>) ein, um den aktuellen Druckstatus zu sehen.
-          </p>
+          {!order && (
+            <p className="text-xs text-[#8E95A5]">
+              Gib einfach deinen Bestell-Code (z. B. <span className="font-mono text-white">ANO-2026-…</span>) ein, um den aktuellen Druckstatus live zu sehen.
+            </p>
+          )}
 
           {error && (
             <div className="p-3.5 rounded-xl bg-red-500/15 border border-red-500/35 text-red-300 text-xs">
@@ -97,22 +114,57 @@ export default function OrderTrackerModal({ open, initialCode, onClose }) {
           )}
 
           {order && (
-            <div className="space-y-5 pt-2">
-              <div className="p-4 rounded-xl bg-[#0C0E13] border border-white/[0.08] flex items-center justify-between">
+            <div className="space-y-5 pt-1">
+              <div className="p-4 rounded-xl bg-[#0C0E13] border border-white/[0.08] flex items-center justify-between gap-3">
                 <div>
-                  <div className="font-mono text-xs text-[#7D8596]">AUFTRAGSNUMMER</div>
+                  <div className="font-mono text-[10px] text-[#7D8596] flex items-center gap-2">
+                    <span>AUFTRAGSNUMMER</span>
+                    <span className="inline-flex items-center gap-1 text-emerald-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      LIVE
+                    </span>
+                  </div>
                   <div className="font-mono text-lg font-bold text-[#FF7326]">{order.id}</div>
                 </div>
-                <div className="text-right">
-                  <div className="font-mono text-xs text-[#7D8596]">SUMME</div>
-                  <div className="font-mono text-base font-bold text-white">
-                    {formatEUR(order.total)}
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => runLookup(order.id)}
+                    className="p-2 rounded-lg bg-white/[0.05] hover:bg-white/[0.12] text-[#9DA4B4] hover:text-white cursor-pointer"
+                    title="Jetzt aktualisieren"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  </button>
+                  <div className="text-right">
+                    <div className="font-mono text-[10px] text-[#7D8596]">GESAMT</div>
+                    <div className="font-mono text-base font-bold text-white">
+                      {formatEUR(order.total)}
+                    </div>
                   </div>
                 </div>
               </div>
 
+              {/* Live Print Progress Bar */}
+              {(order.status === 'im_druck' || progress > 0) && (
+                <div className="p-4 rounded-xl bg-[#141720] border border-[#FF5500]/35 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="text-[#D0D5DF] flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[#FF5500] nozzle-pulse" />
+                      Druckfortschritt
+                    </span>
+                    <span className="text-[#FF7326] font-bold text-sm">{progress}%</span>
+                  </div>
+                  <div className="w-full h-2.5 rounded-full bg-white/[0.08] overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#FF5500] via-[#FF7A26] to-[#38BDF8] transition-all duration-700"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* 5-Stage Print Pipeline */}
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {ORDER_STEPS.map((st, idx) => {
                   const done = idx <= currentIdx;
                   const active = idx === currentIdx;
