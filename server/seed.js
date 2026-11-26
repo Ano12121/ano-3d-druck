@@ -16,14 +16,15 @@ export function verifyPin(pin, salt, expectedHash) {
 
 export function getInitialStore() {
   const now = new Date().toISOString();
-  const initialPin = process.env.ADMIN_PIN || '2026';
+  const envPin = (process.env.ADMIN_PIN || '').trim();
+  const initialPin = envPin || '2026';
   const { salt, hash } = hashPin(initialPin);
 
   return {
     auth: {
       pinSalt: salt,
       pinHash: hash,
-      isDefaultPin: !process.env.ADMIN_PIN,
+      isDefaultPin: !envPin,
     },
     studio: {
       brandName: 'Ano',

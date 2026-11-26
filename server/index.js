@@ -94,6 +94,12 @@ function migrateStore(store) {
     store.auth = defaults.auth;
     changed = true;
   }
+  const envPin = (process.env.ADMIN_PIN || '').trim();
+  if (envPin && !verifyPin(envPin, store.auth.pinSalt, store.auth.pinHash) && (IS_VERCEL || store.auth.isDefaultPin)) {
+    const { salt, hash } = hashPin(envPin);
+    store.auth = { pinSalt: salt, pinHash: hash, isDefaultPin: false };
+    changed = true;
+  }
   if (!store.studio?.legal) {
     store.studio = { ...defaults.studio, ...store.studio, legal: defaults.studio.legal };
     changed = true;
