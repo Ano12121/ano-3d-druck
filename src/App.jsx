@@ -308,7 +308,7 @@ export default function App() {
                 <input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Suche z.B. Lampe, Carbon, Drache..."
+                  placeholder="Suche z.B. Lampe, Drache, Ständer..."
                   className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#12151D] border border-white/[0.1] focus:border-[#FF5500] focus:outline-none text-xs sm:text-sm text-white"
                 />
               </div>
@@ -431,18 +431,18 @@ export default function App() {
             {[
               {
                 icon: Box,
-                title: 'Interaktive 3D-Vorschau',
-                desc: 'Drehe Kreationen & eigene .STL-Dateien direkt im Browser und teste alle Filament-Farben live.',
+                title: 'Live in 3D anschauen',
+                desc: 'Dreh die Teile direkt im Browser und teste sofort alle 5 PLA-Farben live.',
               },
               {
                 icon: Sparkles,
-                title: 'Wunschfarben & Custom-Sizes',
-                desc: 'Wähle aus Matt-Schwarz, Matt-Weiß, Rot-Schwarz Mix, Galaxy Blau-Lila & Pink oder skaliere auf Large (+25%).',
+                title: '5 geile PLA-Farben',
+                desc: 'Matt-Schwarz, Matt-Weiß, Rot-Schwarz Mix, Galaxy Blau-Lila & Pink — auch größer druckbar.',
               },
               {
                 icon: Truck,
-                title: 'Bruchsicher & Schnell versendet',
-                desc: 'Live-Druckstatus per Code, automatische Status-E-Mails & kostenloser Versand ab 50€.',
+                title: 'Ganz entspannt',
+                desc: 'Einfach bestellen oder Modell-Link schicken — Übergabe persönlich oder per Post.',
               },
             ].map((feat) => {
               const Icon = feat.icon;
@@ -488,54 +488,29 @@ export default function App() {
         />
       </main>
 
-      {/* FOOTER WITH LEGAL LINKS */}
-      <footer className="bg-[#0B0C10] border-t border-white/[0.08] py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[#FF5500] flex items-center justify-center">
-                <Box className="w-4 h-4 text-white" />
-              </div>
-              <span className="font-display font-bold text-lg tracking-wider text-white">
+      {/* CLEAN MINIMAL FOOTER */}
+      <footer className="bg-[#0B0C10] border-t border-white/[0.08] py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#FF5500] flex items-center justify-center">
+              <Box className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <span className="font-display font-bold text-base tracking-wider text-white">
                 {studio?.brandName || 'LAYERLAB'}
               </span>
+              <span className="block text-[11px] font-mono text-[#7D8596]">
+                100% PLA 3D-Drucke • Frisch vom Druckbett
+              </span>
             </div>
-            <p className="text-xs text-[#7D8596] max-w-md">
-              Unabhängiges 3D-Druck Studio. Jedes Produkt wird Schicht für Schicht mit Liebe zum
-              Detail gefertigt — lokal, individuell & direkt vom Druckbett.
-            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-mono text-[#8E95A5]">
-            <button
-              onClick={() => setLegalTab('impressum')}
-              className="hover:text-white cursor-pointer"
-            >
-              Impressum
-            </button>
-            <button
-              onClick={() => setLegalTab('agb')}
-              className="hover:text-white cursor-pointer"
-            >
-              AGB
-            </button>
-            <button
-              onClick={() => setLegalTab('widerruf')}
-              className="hover:text-white cursor-pointer"
-            >
-              Widerruf
-            </button>
-            <button
-              onClick={() => setLegalTab('datenschutz')}
-              className="hover:text-white cursor-pointer"
-            >
-              Datenschutz
-            </button>
+          <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-[#8E95A5]">
             <button
               onClick={() => setTrackerOpen(true)}
               className="hover:text-white cursor-pointer"
             >
-              Auftrag tracken
+              Druckstatus checken
             </button>
             <button
               onClick={() => setStudioOpen(true)}
@@ -544,10 +519,6 @@ export default function App() {
               <Upload className="w-3.5 h-3.5 text-[#FF5500]" />
               <span>Creator Studio</span>
             </button>
-            <span className="inline-flex items-center gap-1 text-emerald-400">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Stripe & SSL ready
-            </span>
           </div>
         </div>
       </footer>

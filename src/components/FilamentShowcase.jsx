@@ -10,15 +10,14 @@ export default function FilamentShowcase({ activeColorFilter, onSelectColorFilte
           <div>
             <div className="inline-flex items-center gap-2 font-mono text-xs text-[#FF7326] uppercase tracking-widest mb-2">
               <Disc3 className="w-4 h-4" />
-              <span>DEINE FILAMENT-BAR // AKTUELL AUF LAGER</span>
+              <span>100% PLA // MEINE FARBEN</span>
             </div>
             <h2 className="font-display text-3xl sm:text-4xl font-bold text-white">
-              Deine Kreation. Deine Farbe.
+              Such dir deine PLA-Farbe aus.
             </h2>
             <p className="text-sm sm:text-base text-[#9DA4B4] mt-2 max-w-2xl">
-              Wähle aus unseren 5 Studio-Filamenten — von cleanem Matt-Schwarz & Matt-Weiß über
-              Rot-Schwarz Dual-Mix bis hin zu schimmerndem Galaxy Blau-Lila und kräftigem Pink.
-              Klicke auf eine Spule, um passende Drucke zu filtern.
+              Ich drucke ausschließlich mit PLA — aktuell in diesen 5 Farben. Klick auf eine
+              Spule, um passende Kreationen zu filtern.
             </p>
           </div>
           {activeColorFilter && (

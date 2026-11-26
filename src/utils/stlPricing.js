@@ -2,13 +2,7 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 
 export const MATERIAL_PROFILES = {
-  'PLA Matte': { density: 1.24, eurPerGram: 0.045, ratePerHour: 2.8, setupFee: 4.5 },
-  'PLA+': { density: 1.24, eurPerGram: 0.042, ratePerHour: 2.8, setupFee: 4.5 },
-  'PLA Dual-Color': { density: 1.25, eurPerGram: 0.055, ratePerHour: 3.0, setupFee: 5.0 },
-  'PLA Galaxy': { density: 1.25, eurPerGram: 0.058, ratePerHour: 3.1, setupFee: 5.0 },
-  'PLA Silk': { density: 1.25, eurPerGram: 0.055, ratePerHour: 3.1, setupFee: 5.0 },
-  PETG: { density: 1.27, eurPerGram: 0.052, ratePerHour: 3.2, setupFee: 5.0 },
-  'TPU Flex': { density: 1.21, eurPerGram: 0.075, ratePerHour: 3.8, setupFee: 6.0 },
+  PLA: { density: 1.24, eurPerGram: 0.045, ratePerHour: 2.5, setupFee: 4.0 },
 };
 
 const LAYER_SPEED_FACTOR = {
@@ -72,14 +66,14 @@ export function parseStlArrayBuffer(buffer) {
 
 export function estimateStlPrint({
   parsed,
-  material = 'PLA Matte',
-  infillPercent = 20,
+  material = 'PLA',
+  infillPercent = 15,
   layerHeight = '0.16 mm',
   scalePercent = 100,
 }) {
   if (!parsed) return null;
 
-  const profile = MATERIAL_PROFILES[material] || MATERIAL_PROFILES['PLA Matte'];
+  const profile = MATERIAL_PROFILES[material] || MATERIAL_PROFILES.PLA;
   const s = Math.max(25, Math.min(250, Number(scalePercent) || 100)) / 100;
 
   const widthMm = Math.round(parsed.baseSizeMm.x * s * 10) / 10;

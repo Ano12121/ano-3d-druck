@@ -6,9 +6,9 @@ export const FILAMENTS = [
     swatch: '#1A1C22',
     ring: '#3E4352',
     finish: 'Matte',
-    material: 'PLA Matte',
+    material: 'PLA',
     temp: '210°C',
-    note: 'Tiefmattes Schwarz — edel & kaum sichtbare Layer',
+    note: 'Tiefmattes PLA-Schwarz — clean & edel',
   },
   {
     id: 'matt-weiss',
@@ -17,9 +17,9 @@ export const FILAMENTS = [
     swatch: '#EFEFEA',
     ring: '#FFFFFF',
     finish: 'Matte',
-    material: 'PLA Matte',
+    material: 'PLA',
     temp: '210°C',
-    note: 'Cleanes, warmes Matt-Weiß für modernen Look',
+    note: 'Warmes Matt-Weiß für minimalistischen Look',
   },
   {
     id: 'rot-schwarz',
@@ -30,9 +30,9 @@ export const FILAMENTS = [
       'linear-gradient(135deg, #EF4444 0%, #B91C1C 46%, #181A22 54%, #0B0C10 100%)',
     ring: '#F87171',
     finish: 'Dual-Color',
-    material: 'PLA Dual-Color',
+    material: 'PLA',
     temp: '215°C',
-    note: 'Zweifarbig gemixt — wechselt je nach Blickwinkel',
+    note: 'Zweifarbiges PLA — schimmert je nach Winkel',
   },
   {
     id: 'galaxy-blau-lila',
@@ -43,9 +43,9 @@ export const FILAMENTS = [
       'linear-gradient(135deg, #1D4ED8 0%, #5B46E8 48%, #9333EA 82%, #D8B4FE 100%)',
     ring: '#A78BFA',
     finish: 'Galaxy Sparkle',
-    material: 'PLA Galaxy',
+    material: 'PLA',
     temp: '215°C',
-    note: 'Schimmernder Blau-Lila-Verlauf mit Galaxy-Effekt',
+    note: 'Blau-Lila PLA mit coolem Galaxy-Schimmer',
   },
   {
     id: 'pink',
@@ -54,9 +54,9 @@ export const FILAMENTS = [
     swatch: '#F43F8E',
     ring: '#F9A8D4',
     finish: 'Satin',
-    material: 'PLA+',
+    material: 'PLA',
     temp: '215°C',
-    note: 'Knalliges, sattes Studio-Pink als echter Hingucker',
+    note: 'Kräftiges, sattes PLA-Pink als Hingucker',
   },
 ];
 
@@ -71,22 +71,14 @@ export const CATEGORIES = [
   'Home & Pflanzen',
 ];
 
-export const MATERIALS = [
-  'PLA Matte',
-  'PLA+',
-  'PLA Dual-Color',
-  'PLA Galaxy',
-  'PLA Silk',
-  'PETG',
-  'TPU Flex',
-];
+export const MATERIALS = ['PLA'];
 
 export const ORDER_STEPS = [
-  { key: 'neu', label: 'Eingegangen', desc: 'Bestellung bestätigt' },
-  { key: 'slicing', label: 'Slicing & Setup', desc: 'Druckprofil wird vorbereitet' },
-  { key: 'im_druck', label: 'Auf dem Druckbett', desc: 'Schicht für Schicht im Druck' },
-  { key: 'finish', label: 'Qualitätscheck', desc: 'Finishing & Verpackung' },
-  { key: 'versendet', label: 'Versendet', desc: 'Auf dem Weg zu dir' },
+  { key: 'neu', label: 'Eingegangen', desc: 'Anfrage ist bei mir' },
+  { key: 'slicing', label: 'Vorbereitung', desc: 'Modell wird vorbereitet' },
+  { key: 'im_druck', label: 'Im 3D-Drucker', desc: 'Wird gerade gedruckt' },
+  { key: 'finish', label: 'Fertig', desc: 'Bereit zur Übergabe / Versand' },
+  { key: 'versendet', label: 'Übergeben / Versendet', desc: 'Erledigt' },
 ];
 
 export function getFilamentById(id) {

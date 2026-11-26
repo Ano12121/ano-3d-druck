@@ -6,3 +6,5 @@ server/data/
 server/uploads/raw/
 server/uploads/studio/
 server/uploads/models/
+
+.vercel

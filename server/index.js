@@ -117,6 +117,10 @@ function migrateStore(store) {
         changed = true;
         next = { ...next, modelUrl: next.modelUrl || null, demoModel: DEMO_MODEL_BY_ID[next.id] };
       }
+      if (next.material !== 'PLA') {
+        changed = true;
+        next = { ...next, material: 'PLA' };
+      }
       const hasLegacyColors =
         !Array.isArray(next.colors) ||
         next.colors.length === 0 ||
@@ -529,7 +533,7 @@ app.post('/api/products', requireAdmin, productUploadFields, async (req, res) =>
     images,
     modelUrl,
     demoModel: null,
-    material: req.body.material || 'PLA Matte',
+    material: 'PLA',
     colors: parseJsonField(req.body.colors, DEFAULT_USER_COLORS),
     specs: {
       layerHeight: req.body.layerHeight || '0.16 mm',
@@ -720,8 +724,8 @@ app.post('/api/orders', async (req, res) => {
   const store = readStore();
   const { customer, items, paymentMethod } = req.body || {};
 
-  if (!customer?.name || !customer?.email || !customer?.street || !customer?.city) {
-    return res.status(400).json({ error: 'Bitte fülle alle erforderlichen Lieferdaten aus.' });
+  if (!customer?.name || !customer.name.trim()) {
+    return res.status(400).json({ error: 'Bitte gib zumindest deinen Namen ein.' });
   }
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Dein Warenkorb ist leer.' });
@@ -730,7 +734,7 @@ app.post('/api/orders', async (req, res) => {
   let subtotal = 0;
   const cleanItems = items.map((item) => {
     const product = store.products.find((p) => p.id === item.productId);
-    const sizeMultiplier = item.sizeOption === 'Large (+25%)' ? 1.25 : 1;
+    const sizeMultiplier = item.sizeOption === 'Groß (+25%)' || item.sizeOption === 'Large (+25%)' ? 1.25 : 1;
     const basePrice = product ? product.price : Number(item.unitPrice) || 0;
     const unitPrice = Math.round(basePrice * sizeMultiplier * 100) / 100;
     const quantity = Math.max(1, parseInt(item.quantity, 10) || 1);
@@ -754,21 +758,24 @@ app.post('/api/orders', async (req, res) => {
   });
 
   subtotal = Math.round(subtotal * 100) / 100;
-  const shipping = subtotal >= 50 ? 0 : 4.9;
+  const wantsShipping = customer.deliveryMode === 'Versand';
+  const shipping = wantsShipping ? (subtotal >= 50 ? 0 : 4.9) : 0;
   const total = Math.round((subtotal + shipping) * 100) / 100;
   const code = `LL-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  const chosenMethod = paymentMethod || 'Stripe (Karte / Apple Pay)';
+  const chosenMethod = paymentMethod || 'Bar / PayPal unter Freunden';
   const isStripeMethod = chosenMethod.toLowerCase().includes('stripe');
 
   const order = {
     id: code,
     customer: {
       name: customer.name.trim(),
-      email: customer.email.trim(),
-      street: customer.street.trim(),
+      contact: (customer.contact || customer.email || '').trim(),
+      email: (customer.email || '').trim(),
+      deliveryMode: wantsShipping ? 'Versand' : 'Abholung / Übergabe',
+      street: (customer.street || '').trim(),
       postalCode: (customer.postalCode || '').trim(),
-      city: customer.city.trim(),
+      city: (customer.city || '').trim(),
       notes: (customer.notes || '').trim(),
     },
     paymentMethod: chosenMethod,
@@ -798,9 +805,11 @@ app.post('/api/orders', async (req, res) => {
 
   store.orders.unshift(order);
 
-  // Send / log confirmation email
-  const mailEntry = await sendOrderConfirmationEmail(order, store.studio);
-  store.emailLog = [mailEntry, ...(store.emailLog || [])].slice(0, 60);
+  // Send / log confirmation email only if an email was provided
+  if (order.customer.email && order.customer.email.includes('@')) {
+    const mailEntry = await sendOrderConfirmationEmail(order, store.studio);
+    store.emailLog = [mailEntry, ...(store.emailLog || [])].slice(0, 60);
+  }
 
   writeStore(store);
   res.status(201).json({ order, checkoutUrl });
@@ -846,8 +855,10 @@ app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Ungültiger Status.' });
     }
     order.status = req.body.status;
-    const mailEntry = await sendOrderStatusEmail(order, store.studio);
-    store.emailLog = [mailEntry, ...(store.emailLog || [])].slice(0, 60);
+    if (order.customer?.email && order.customer.email.includes('@')) {
+      const mailEntry = await sendOrderStatusEmail(order, store.studio);
+      store.emailLog = [mailEntry, ...(store.emailLog || [])].slice(0, 60);
+    }
   }
   if (req.body.paymentStatus) {
     order.paymentStatus = req.body.paymentStatus;
@@ -864,8 +875,8 @@ const inquiryUploadFields = upload.fields([
 
 app.post('/api/inquiries', inquiryUploadFields, async (req, res) => {
   const store = readStore();
-  if (!req.body.name || !req.body.email || !req.body.projectTitle) {
-    return res.status(400).json({ error: 'Bitte gib Name, E-Mail und Projekttitel an.' });
+  if (!req.body.name || !req.body.name.trim()) {
+    return res.status(400).json({ error: 'Bitte gib kurz deinen Namen ein.' });
   }
 
   const refImg = req.files?.referenceImage?.[0];
@@ -873,14 +884,20 @@ app.post('/api/inquiries', inquiryUploadFields, async (req, res) => {
   const refUrl = refImg ? await persistUploadedFile(refImg, '') : null;
   const stlUrl = stlFile ? await persistUploadedFile(stlFile, 'models') : null;
 
+  const autoTitle =
+    (req.body.projectTitle || '').trim() ||
+    (stlFile ? stlFile.originalname.replace(/\.stl$/i, '') : '') ||
+    (req.body.stlLink ? '3D-Modell Link' : 'Wunschdruck');
+
   const inquiry = {
     id: `REQ-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
     name: req.body.name.trim(),
-    email: req.body.email.trim(),
-    projectTitle: req.body.projectTitle.trim(),
+    contact: (req.body.contact || req.body.email || '').trim(),
+    email: (req.body.email || '').trim(),
+    projectTitle: autoTitle,
     description: (req.body.description || '').trim(),
     stlLink: (req.body.stlLink || '').trim(),
-    material: req.body.material || 'PLA Matte',
+    material: 'PLA',
     colorName: req.body.colorName || 'Matt-Schwarz',
     dimensions: (req.body.dimensions || '').trim(),
     budget: (req.body.budget || '').trim(),

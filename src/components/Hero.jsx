@@ -33,12 +33,11 @@ export default function Hero({ studio, featuredProducts, onSelectProduct, onOpen
         {/* Top CAD Coordinate Telemetry Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-10 pb-4 border-b border-white/[0.06] font-mono text-[11px] text-[#7D8596]">
           <div className="flex items-center gap-4">
-            <span className="text-[#FF7326]">● STUDIO ONLINE</span>
-            <span>X:256.0 Y:256.0 Z:256.0 MM</span>
-            <span className="hidden sm:inline">TOLERANZ ±0.05 MM</span>
+            <span className="text-[#FF7326]">● DRUCKER ONLINE</span>
+            <span>X:256 Y:256 Z:256 MM</span>
           </div>
           <div className="flex items-center gap-4">
-            <span>FDM / MULTI-COLOR / CARBON-CF</span>
+            <span>100% PLA // 5 FARBEN</span>
             <span className="hidden md:inline text-white/60">MADE ON PRINTBED</span>
           </div>
         </div>
@@ -48,7 +47,7 @@ export default function Hero({ studio, featuredProducts, onSelectProduct, onOpen
           <div className="lg:col-span-6 space-y-7">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#151822] border border-white/[0.1] text-xs font-mono text-[#D0D5DF]">
               <Layers className="w-3.5 h-3.5 text-[#FF5500]" />
-              <span>Original 3D-Druck Kreationen • Limitiert & Custom</span>
+              <span>Meine 3D-Drucke • Frisch in PLA gedruckt</span>
             </div>
 
             <h1 className="font-display text-4xl sm:text-5xl lg:text-[58px] font-bold tracking-tight leading-[1.04] text-white">
@@ -62,9 +61,8 @@ export default function Hero({ studio, featuredProducts, onSelectProduct, onOpen
             </h1>
 
             <p className="text-base sm:text-lg text-[#9DA4B4] leading-relaxed max-w-xl">
-              Entdecke moderne Lampen, modulare Desk-Gadgets, Sammlerfiguren und funktionale
-              Unikate aus unserem 3D-Druck-Studio. Jedes Teil wird in deiner Wunschfarbe aus
-              hochwertigen Spezial-Filamenten gefertigt.
+              Schau dir meine 3D-Druck-Kreationen an, wähle deine Lieblingsfarbe in PLA — oder
+              schick mir einfach einen Link bzw. ein Bild von dem, was du gedruckt haben willst.
             </p>
 
             <div className="flex flex-wrap items-center gap-3.5 pt-1">
@@ -72,7 +70,7 @@ export default function Hero({ studio, featuredProducts, onSelectProduct, onOpen
                 href="#shop"
                 className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-[#FF5500] hover:bg-[#FF6B1F] text-white font-semibold text-sm shadow-[0_10px_35px_rgba(255,85,0,0.32)] transition-all hover:-translate-y-0.5"
               >
-                <span>Kreationen entdecken</span>
+                <span>Kreationen ansehen</span>
                 <ArrowRight className="w-4 h-4" />
               </a>
               <a
@@ -80,30 +78,30 @@ export default function Hero({ studio, featuredProducts, onSelectProduct, onOpen
                 className="inline-flex items-center gap-2 px-5 py-3.5 rounded-xl bg-[#141720] hover:bg-[#1C202D] text-white font-medium text-sm border border-white/[0.11] transition-all"
               >
                 <Sparkles className="w-4 h-4 text-[#38BDF8]" />
-                <span>Wunschdruck anfragen</span>
+                <span>Eigenes Modell schicken</span>
               </a>
               <button
                 onClick={onOpenStudio}
                 className="inline-flex items-center gap-2 px-4 py-3.5 rounded-xl text-[#9DA4B4] hover:text-white text-sm font-medium transition-colors cursor-pointer"
               >
                 <Upload className="w-4 h-4 text-[#FF5500]" />
-                <span>Eigenes Werk hochladen</span>
+                <span>Creator Studio</span>
               </button>
             </div>
 
             {/* Key Studio Specs */}
             <div className="grid grid-cols-3 gap-4 pt-5 border-t border-white/[0.08] max-w-lg">
               <div>
-                <div className="font-mono text-xl sm:text-2xl font-bold text-white">0.12 mm</div>
-                <div className="text-xs text-[#7D8596] mt-0.5">Feine Layer-Präzision</div>
+                <div className="font-mono text-xl sm:text-2xl font-bold text-white">100% PLA</div>
+                <div className="text-xs text-[#7D8596] mt-0.5">Sauber & stabil gedruckt</div>
               </div>
               <div>
-                <div className="font-mono text-xl sm:text-2xl font-bold text-white">5</div>
-                <div className="text-xs text-[#7D8596] mt-0.5">Studio-Filamentfarben</div>
+                <div className="font-mono text-xl sm:text-2xl font-bold text-white">5 Farben</div>
+                <div className="text-xs text-[#7D8596] mt-0.5">inkl. Galaxy & Rot-Schwarz</div>
               </div>
               <div>
-                <div className="font-mono text-xl sm:text-2xl font-bold text-white">2–3 Tage</div>
-                <div className="text-xs text-[#7D8596] mt-0.5">Frisch gedruckt & versendet</div>
+                <div className="font-mono text-xl sm:text-2xl font-bold text-white">Easy</div>
+                <div className="text-xs text-[#7D8596] mt-0.5">Einfach Link oder Bild schicken</div>
               </div>
             </div>
           </div>

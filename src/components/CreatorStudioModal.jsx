@@ -52,7 +52,7 @@ const EMPTY_FORM = {
   compareAtPrice: '',
   category: 'Gaming & Desk',
   badge: 'Neu',
-  material: 'PLA Matte',
+  material: 'PLA',
   colors: ['matt-schwarz', 'matt-weiss', 'rot-schwarz', 'galaxy-blau-lila', 'pink'],
   layerHeight: '0.16 mm',
   printTime: '4h 15m',
@@ -703,8 +703,8 @@ export default function CreatorStudioModal({
                 />
               </div>
 
-              {/* Pricing, Category, Material */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {/* Pricing & Category (100% PLA) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-mono text-[#9DA4B4] mb-1.5">
                     Preis (€) *
@@ -728,13 +728,13 @@ export default function CreatorStudioModal({
                     step="0.10"
                     value={form.compareAtPrice}
                     onChange={(e) => setForm({ ...form, compareAtPrice: e.target.value })}
-                    placeholder="z.B. 39.90"
+                    placeholder="optional"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-[#141720] border border-white/[0.1] focus:border-[#FF5500] focus:outline-none font-mono text-sm text-white"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-mono text-[#9DA4B4] mb-1.5">
-                    Kategorie
+                    Kategorie (Material: PLA)
                   </label>
                   <select
                     value={form.category}
@@ -744,22 +744,6 @@ export default function CreatorStudioModal({
                     {CATEGORIES.filter((c) => c !== 'Alle').map((c) => (
                       <option key={c} value={c}>
                         {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-mono text-[#9DA4B4] mb-1.5">
-                    Material
-                  </label>
-                  <select
-                    value={form.material}
-                    onChange={(e) => setForm({ ...form, material: e.target.value })}
-                    className="w-full px-3 py-2.5 rounded-xl bg-[#141720] border border-white/[0.1] focus:border-[#FF5500] focus:outline-none text-sm text-white"
-                  >
-                    {MATERIALS.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
                       </option>
                     ))}
                   </select>
@@ -1081,14 +1065,19 @@ export default function CreatorStudioModal({
                             )}
                           </div>
                           <div className="text-sm text-white font-medium mt-1">
-                            {order.customer?.name}{' '}
-                            <span className="text-[#8E95A5] font-normal">
-                              ({order.customer?.email})
-                            </span>
+                            {order.customer?.name}
+                            {(order.customer?.contact || order.customer?.email) && (
+                              <span className="text-[#8E95A5] font-normal">
+                                {' '}
+                                ({order.customer?.contact || order.customer?.email})
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs text-[#8E95A5]">
-                            {order.customer?.street}, {order.customer?.postalCode}{' '}
-                            {order.customer?.city}
+                            {order.customer?.deliveryMode || 'Übergabe'}
+                            {order.customer?.street
+                              ? ` • ${order.customer.street}, ${order.customer.postalCode} ${order.customer.city}`
+                              : ''}
                           </div>
                           {order.customer?.notes && (
                             <div className="mt-2 px-3 py-1.5 rounded-lg bg-[#0A0C10] border border-white/[0.06] text-xs text-[#D0D5DF]">
@@ -1199,7 +1188,9 @@ export default function CreatorStudioModal({
                             {inq.projectTitle}
                           </h4>
                           <div className="text-xs text-[#8E95A5]">
-                            Von {inq.name} ({inq.email}) • {inq.material} • {inq.colorName}
+                            Von {inq.name}
+                            {inq.contact || inq.email ? ` (${inq.contact || inq.email})` : ''} •
+                            PLA • {inq.colorName}
                           </div>
                         </div>
                         <select

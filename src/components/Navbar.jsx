@@ -2,7 +2,6 @@ import React from 'react';
 import {
   ShoppingBag,
   Upload,
-  PackageSearch,
   Sparkles,
   Box,
   Lock,
@@ -19,27 +18,6 @@ export default function Navbar({
 }) {
   return (
     <header className="sticky top-0 z-40">
-      {/* Top Studio Announcement Ticker */}
-      <div className="bg-[#0E1015] border-b border-white/[0.07] px-4 py-2 text-xs">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 text-[#A5ACB8]">
-            <span className="inline-block w-2 h-2 rounded-full bg-[#FF5500] nozzle-pulse shrink-0" />
-            <span className="font-mono tracking-tight text-[11px] sm:text-xs">
-              {studio?.announcement ||
-                'Kostenloser Versand ab 50€ • Jede Kreation wird frisch auf dem Druckbett gefertigt'}
-            </span>
-          </div>
-          <button
-            onClick={onOpenTracker}
-            className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#38BDF8] hover:text-white transition-colors cursor-pointer"
-          >
-            <PackageSearch className="w-3.5 h-3.5" />
-            <span>Druckstatus tracken</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Main Navigation */}
       <nav className="backdrop-blur-xl bg-[#090A0D]/85 border-b border-white/[0.08]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           {/* Brand Logo */}
@@ -55,7 +33,7 @@ export default function Navbar({
                 </span>
               </div>
               <div className="text-[10px] font-mono tracking-[0.16em] text-[#7D8596] mt-0.5 hidden xl:block whitespace-nowrap">
-                {studio?.tagline || '3D-DRUCK STUDIO // CUSTOM DROPS'}
+                {studio?.tagline || '3D-DRUCK STUDIO // 100% PLA'}
               </div>
             </div>
           </a>
@@ -66,7 +44,7 @@ export default function Navbar({
               Kreationen
             </a>
             <a href="#filaments" className="hover:text-white transition-colors">
-              Filament-Bar
+              Meine PLA-Farben
             </a>
             <a href="#custom-print" className="hover:text-white transition-colors flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-[#FF5500]" />
@@ -76,7 +54,7 @@ export default function Navbar({
               onClick={onOpenTracker}
               className="hover:text-white transition-colors cursor-pointer"
             >
-              Auftrag tracken
+              Druckstatus
             </button>
           </div>
 

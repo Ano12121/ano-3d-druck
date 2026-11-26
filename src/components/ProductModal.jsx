@@ -275,7 +275,7 @@ export default function ProductModal({
                     {formatEUR(product.compareAtPrice)}
                   </span>
                 )}
-                <span className="text-xs font-mono text-[#7D8596]">zzgl. ggf. Versand</span>
+                <span className="text-xs font-mono text-[#7D8596]">100% PLA</span>
               </div>
 
               <p className="text-sm text-[#B8BFCE] leading-relaxed">
@@ -398,12 +398,12 @@ export default function ProductModal({
                 <span className="inline-flex items-center gap-1.5">
                   <Truck className="w-3.5 h-3.5 text-[#38BDF8]" />
                   {product.stockMode === 'in-stock'
-                    ? `Auf Lager (${product.stockCount}x) • Versand in 1–2 Tagen`
-                    : `Frisch gedruckt • Lieferzeit ${product.leadTime || '2–3 Werktage'}`}
+                    ? `Direkt fertig (${product.stockCount}x da)`
+                    : `Wird frisch in PLA gedruckt (${product.leadTime || '2–3 Tage'})`}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  Handgeprüftes Finish
+                  Übergabe oder Versand
                 </span>
               </div>
             </div>
