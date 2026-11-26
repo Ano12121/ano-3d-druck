@@ -211,7 +211,7 @@ export default function PhotoStudioTab({
                     : 'bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/35'
                 }`}
               >
-                {geminiConfigured ? 'GEMINI KI LIVE' : 'BEREIT FÜR HANDY-UPLOAD'}
+                {geminiConfigured ? 'KI FOTOSTUDIO LIVE' : 'BEREIT FÜR HANDY-UPLOAD'}
               </span>
             </h3>
             <p className="text-xs text-[#9DA4B4] mt-0.5">
@@ -252,8 +252,8 @@ export default function PhotoStudioTab({
             />
             {geminiConfigured ? (
               <span className="text-[#D0D5DF]">
-                <strong className="text-emerald-400">Gemini KI-Bildgenerator verbunden!</strong>{' '}
-                Jedes Handyfoto kann per Knopfdruck neu beleuchtet & ins Dark-Studio gesetzt werden.
+                <strong className="text-emerald-400">KI-Bildgenerator bereit (Gemini 3.1 Flash Image)!</strong>{' '}
+                Läuft direkt über Vercel AI Gateway (oder optional deinen eigenen Gemini Key).
               </span>
             ) : (
               <span className="text-[#B8BFCE]">

@@ -1,4 +1,6 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
@@ -15,6 +17,8 @@ import {
 } from './mailer.js';
 import {
   getLanUrls,
+  isAiGatewayAvailable,
+  transformPhotoWithAiGateway,
   transformPhotoWithGemini,
 } from './photoStudio.js';
 import {
@@ -336,7 +340,7 @@ app.get('/api/bootstrap', (req, res) => {
     isDefaultPin: Boolean(store.auth?.isDefaultPin),
     stripeConfigured: isStripeConfigured(),
     smtpConfigured: isSmtpConfigured(),
-    geminiConfigured: Boolean(getGeminiApiKey()),
+    geminiConfigured: Boolean(getGeminiApiKey() || isAiGatewayAvailable()),
     lanUrls: authed ? getLanUrls(5173) : [],
     orders: authed ? store.orders : [],
     inquiries: authed ? store.inquiries : [],
@@ -358,7 +362,7 @@ app.get('/api/admin/dashboard', requireAdmin, (_req, res) => {
     isDefaultPin: Boolean(store.auth?.isDefaultPin),
     stripeConfigured: isStripeConfigured(),
     smtpConfigured: isSmtpConfigured(),
-    geminiConfigured: Boolean(getGeminiApiKey()),
+    geminiConfigured: Boolean(getGeminiApiKey() || isAiGatewayAvailable()),
     lanUrls: getLanUrls(5173),
   });
 });
@@ -373,7 +377,7 @@ app.post('/api/studio/photo-key', requireAdmin, (req, res) => {
     delete secrets.geminiApiKey;
   }
   writeSecrets(secrets);
-  res.json({ geminiConfigured: Boolean(getGeminiApiKey()) });
+  res.json({ geminiConfigured: Boolean(getGeminiApiKey() || isAiGatewayAvailable()) });
 });
 
 app.post(
@@ -412,24 +416,35 @@ app.post(
       return res.status(201).json(entry);
     }
 
-    const apiKey = getGeminiApiKey();
-    if (!apiKey) {
+    const directApiKey = getGeminiApiKey();
+    const useGateway = !directApiKey && isAiGatewayAvailable();
+
+    if (!directApiKey && !useGateway) {
       return res.status(400).json({
         error:
-          'Bitte hinterlege erst deinen kostenlosen Gemini API-Key im Fotostudio — oder nutze den Sofort-Studio-Look / die Rohfoto-Inbox.',
+          'Weder Vercel AI Gateway noch ein Gemini API-Key ist verbunden — nutze den Sofort-Studio-Look oder verbinde oben deinen Key.',
       });
     }
 
     try {
-      const result = await transformPhotoWithGemini({
-        apiKey,
-        imagePath: req.file.path,
-        mimeType: req.file.mimetype,
-        style,
-        colorOverride,
-        customNote,
-        outputDir: STUDIO_IMG_DIR,
-      });
+      const result = directApiKey
+        ? await transformPhotoWithGemini({
+            apiKey: directApiKey,
+            imagePath: req.file.path,
+            mimeType: req.file.mimetype,
+            style,
+            colorOverride,
+            customNote,
+            outputDir: STUDIO_IMG_DIR,
+          })
+        : await transformPhotoWithAiGateway({
+            imagePath: req.file.path,
+            mimeType: req.file.mimetype,
+            style,
+            colorOverride,
+            customNote,
+            outputDir: STUDIO_IMG_DIR,
+          });
 
       const entry = {
         id: `PHOTO-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -441,7 +456,7 @@ app.post(
         colorOverride,
         customNote,
         status: 'fertig',
-        engine: `gemini (${result.modelUsed})`,
+        engine: result.modelUsed,
         createdAt: new Date().toISOString(),
       };
 
@@ -449,9 +464,14 @@ app.post(
       writeStore(store);
       res.status(201).json(entry);
     } catch (err) {
-      res.status(502).json({
-        error: `KI-Bildgenerierung fehlgeschlagen: ${err.message}`,
-      });
+      const msg = err.message || 'Unbekannter Fehler';
+      const friendly =
+        msg.includes('customer_verification_required') || msg.includes('credit card')
+          ? 'Vercel AI Gateway verlangt einmalig eine hinterlegte Karte für die kostenlosen Credits (vercel.com → AI Gateway). Alternativ ohne Kreditkarte: einfach kostenlosen Key von aistudio.google.com/apikey oben über „+ Key ändern“ einfügen!'
+          : msg.includes('insufficient_funds') || msg.includes('402')
+          ? 'Vercel AI Gateway Credits sind aufgebraucht — lade Credits auf oder hinterlege oben einen eigenen Gemini API-Key.'
+          : `KI-Bildgenerierung fehlgeschlagen: ${msg}`;
+      res.status(502).json({ error: friendly });
     }
   }
 );
