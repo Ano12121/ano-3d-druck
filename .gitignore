@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.vercel
+server/data/
+server/uploads/raw/
+server/uploads/studio/
+server/uploads/models/
