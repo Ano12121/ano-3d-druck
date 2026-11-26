@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { FILAMENTS } from '../data/filaments';
 import {
+  getSavedBrowserGeminiKey,
   saveGeminiApiKey,
   transformStudioPhoto,
   saveLocalStudioPhoto,
@@ -71,7 +72,8 @@ export default function PhotoStudioTab({
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
 
-  // Inline Gemini API Key Setup
+  // Inline Gemini API Key Setup (persists in browser localStorage too so Vercel serverless always receives it!)
+  const [hasBrowserKey, setHasBrowserKey] = useState(() => Boolean(getSavedBrowserGeminiKey()));
   const [showKeyBox, setShowKeyBox] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [savingKey, setSavingKey] = useState(false);
@@ -99,10 +101,11 @@ export default function PhotoStudioTab({
     setError('');
     try {
       await saveGeminiApiKey(apiKeyInput);
+      setHasBrowserKey(Boolean(apiKeyInput.trim()));
       setApiKeyInput('');
       setShowKeyBox(false);
       await onRefresh();
-      onShowToast('Gemini API-Key gespeichert — KI Fotostudio ist jetzt LIVE!');
+      onShowToast('Google AI Studio Key verbunden — KI Fotostudio nutzt jetzt direkt Gemini!');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -112,6 +115,7 @@ export default function PhotoStudioTab({
 
   const handleClearKey = async () => {
     await saveGeminiApiKey('');
+    setHasBrowserKey(false);
     await onRefresh();
     onShowToast('Gemini API-Key entfernt.');
   };
@@ -250,10 +254,24 @@ export default function PhotoStudioTab({
             <KeyRound
               className={`w-4 h-4 ${geminiConfigured ? 'text-emerald-400' : 'text-[#FF7326]'}`}
             />
-            {geminiConfigured ? (
+            {hasBrowserKey ? (
               <span className="text-[#D0D5DF]">
-                <strong className="text-emerald-400">KI-Bildgenerator bereit (Gemini 3.1 Flash Image)!</strong>{' '}
-                Läuft direkt über Vercel AI Gateway (oder optional deinen eigenen Gemini Key).
+                <strong className="text-emerald-400">Dein Google AI Studio Key ist aktiv!</strong>{' '}
+                Fotos werden direkt über deinen Gemini-Account generiert.
+              </span>
+            ) : geminiConfigured ? (
+              <span className="text-[#D0D5DF]">
+                <strong className="text-[#38BDF8]">Google AI Studio Key noch nicht eingetragen.</strong>{' '}
+                Hol dir deinen Key unter{' '}
+                <a
+                  href="https://aistudio.google.com/apikey"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#FF7326] underline inline-flex items-center gap-0.5"
+                >
+                  aistudio.google.com/apikey <ExternalLink className="w-3 h-3" />
+                </a>{' '}
+                und klick rechts auf <strong>„+ Google Key eintragen“</strong>!
               </span>
             ) : (
               <span className="text-[#B8BFCE]">
@@ -284,9 +302,9 @@ export default function PhotoStudioTab({
             <button
               type="button"
               onClick={() => setShowKeyBox((s) => !s)}
-              className="px-3 py-1.5 rounded-lg bg-white/[0.07] hover:bg-white/[0.14] text-xs font-mono text-white cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-[#FF5500]/20 hover:bg-[#FF5500]/35 border border-[#FF5500]/50 text-xs font-mono text-white cursor-pointer"
             >
-              {geminiConfigured ? 'Key ändern' : '+ Gemini Key verbinden'}
+              {hasBrowserKey ? 'Google Key ändern' : '+ Google Key eintragen'}
             </button>
           </div>
         </div>

@@ -161,19 +161,33 @@ export async function updateStudioSettings(payload) {
   return handleResponse(res);
 }
 
+const GEMINI_LOCAL_KEY = 'ano_gemini_api_key';
+
+export function getSavedBrowserGeminiKey() {
+  return localStorage.getItem(GEMINI_LOCAL_KEY) || '';
+}
+
 export async function saveGeminiApiKey(apiKey) {
+  const clean = String(apiKey || '').trim();
+  if (clean) {
+    localStorage.setItem(GEMINI_LOCAL_KEY, clean);
+  } else {
+    localStorage.removeItem(GEMINI_LOCAL_KEY);
+  }
   const res = await fetch(`${API_BASE}/studio/photo-key`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ apiKey }),
+    body: JSON.stringify({ apiKey: clean }),
   });
   return handleResponse(res);
 }
 
 export async function transformStudioPhoto(formData) {
+  const browserKey = getSavedBrowserGeminiKey();
+  const extra = browserKey ? { 'X-Gemini-Key': browserKey } : {};
   const res = await fetch(`${API_BASE}/studio/photo-transform`, {
     method: 'POST',
-    headers: authHeaders(),
+    headers: authHeaders(extra),
     body: formData,
   });
   return handleResponse(res);

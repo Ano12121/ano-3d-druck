@@ -143,63 +143,77 @@ export async function transformPhotoWithGemini({
   const base64Data = fs.readFileSync(imagePath).toString('base64');
   const prompt = buildStudioPrompt({ style, colorOverride, customNote });
 
-  const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-    model
-  )}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const preferred = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
+  const modelsToTry = Array.from(
+    new Set([preferred, 'gemini-2.5-flash-image'])
+  );
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                mimeType: mimeType || 'image/jpeg',
-                data: base64Data,
+  let lastError = 'Unbekannter Gemini API Fehler.';
+
+  for (const model of modelsToTry) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+      model
+    )}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: mimeType || 'image/jpeg',
+                  data: base64Data,
+                },
               },
-            },
-            { text: prompt },
-          ],
+              { text: prompt },
+            ],
+          },
+        ],
+        generationConfig: {
+          responseModalities: ['TEXT', 'IMAGE'],
         },
-      ],
-      generationConfig: {
-        responseModalities: ['TEXT', 'IMAGE'],
-      },
-    }),
-  });
+      }),
+    });
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.error?.message || `Gemini API Fehler (${res.status})`);
-  }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      lastError = data.error?.message || `Gemini API Fehler (${res.status})`;
+      if (res.status === 404 || lastError.toLowerCase().includes('not found')) {
+        continue;
+      }
+      throw new Error(lastError);
+    }
 
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  const imagePart = parts.find((p) => p.inlineData?.data || p.inline_data?.data);
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    const imagePart = parts.find((p) => p.inlineData?.data || p.inline_data?.data);
 
-  if (!imagePart) {
+    if (imagePart) {
+      const inline = imagePart.inlineData || imagePart.inline_data;
+      const outMime = inline.mimeType || inline.mime_type || 'image/png';
+      const ext = outMime.includes('jpeg') || outMime.includes('jpg') ? '.jpg' : '.png';
+      const filename = `studio-${Date.now()}-${Math.random().toString(36).slice(2, 7)}${ext}`;
+      const buffer = Buffer.from(inline.data, 'base64');
+      const studioUrl = await persistGeneratedBuffer({
+        buffer,
+        filename,
+        mimeType: outMime,
+        subfolder: 'studio',
+        localDir: outputDir,
+      });
+
+      return {
+        filename,
+        studioUrl,
+        modelUsed: model,
+      };
+    }
+
     const textReply = parts.map((p) => p.text).filter(Boolean).join(' ');
-    throw new Error(textReply || 'Gemini hat kein Bild zurückgegeben.');
+    lastError = textReply || 'Gemini hat kein Bild zurückgegeben.';
   }
 
-  const inline = imagePart.inlineData || imagePart.inline_data;
-  const outMime = inline.mimeType || inline.mime_type || 'image/png';
-  const ext = outMime.includes('jpeg') || outMime.includes('jpg') ? '.jpg' : '.png';
-  const filename = `studio-${Date.now()}-${Math.random().toString(36).slice(2, 7)}${ext}`;
-  const buffer = Buffer.from(inline.data, 'base64');
-  const studioUrl = await persistGeneratedBuffer({
-    buffer,
-    filename,
-    mimeType: outMime,
-    subfolder: 'studio',
-    localDir: outputDir,
-  });
-
-  return {
-    filename,
-    studioUrl,
-    modelUsed: model,
-  };
+  throw new Error(lastError);
 }

@@ -416,7 +416,8 @@ app.post(
       return res.status(201).json(entry);
     }
 
-    const directApiKey = getGeminiApiKey();
+    const headerKey = String(req.headers['x-gemini-key'] || '').trim();
+    const directApiKey = headerKey || getGeminiApiKey();
     const useGateway = !directApiKey && isAiGatewayAvailable();
 
     if (!directApiKey && !useGateway) {
