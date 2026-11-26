@@ -48,8 +48,10 @@ export default function ProductModal({
   if (!product) return null;
 
   const has3D = Boolean(product.modelUrl || product.demoModel);
+  const canScale = Boolean(product.allowScaling);
+  const effectiveSizeOption = canScale ? sizeOption : 'Standard (100%)';
   const selectedFilament = getFilamentById(selectedColorId);
-  const scaleMultiplier = sizeOption === 'Large (+25%)' ? 1.25 : 1;
+  const scaleMultiplier = effectiveSizeOption === 'Large (+25%)' ? 1.25 : 1;
   const finalPrice = Math.round(product.price * scaleMultiplier * 100) / 100;
   const isOutOfStock = product.stockMode === 'in-stock' && product.stockCount <= 0;
 
@@ -61,7 +63,7 @@ export default function ProductModal({
       colorId: selectedFilament.id,
       colorName: selectedFilament.name,
       colorHex: selectedFilament.swatch || selectedFilament.hex,
-      sizeOption,
+      sizeOption: effectiveSizeOption,
       quantity,
       unitPrice: finalPrice,
     });
@@ -141,7 +143,7 @@ export default function ProductModal({
                   colorHex={selectedFilament.hex}
                   secondaryHex={selectedFilament.secondaryHex}
                   finish={selectedFilament.finish}
-                  scaleFactor={sizeOption === 'Large (+25%)' ? 1.15 : 1}
+                  scaleFactor={effectiveSizeOption === 'Large (+25%)' ? 1.15 : 1}
                   heightClass="h-[300px] sm:h-[340px]"
                   label={
                     product.modelUrl
@@ -310,7 +312,7 @@ export default function ProductModal({
                 <span className="font-mono text-3xl font-bold text-white">
                   {formatEUR(finalPrice)}
                 </span>
-                {product.compareAtPrice && sizeOption === 'Standard (100%)' && (
+                {product.compareAtPrice && effectiveSizeOption === 'Standard (100%)' && (
                   <span className="font-mono text-base text-[#6E7687] line-through">
                     {formatEUR(product.compareAtPrice)}
                   </span>
@@ -367,33 +369,35 @@ export default function ProductModal({
                 </div>
               </div>
 
-              {/* Scale / Size Option */}
-              <div>
-                <div className="font-mono text-xs uppercase tracking-wider text-[#8E95A5] mb-2">
-                  Skalierung / Größe
+              {/* Scale / Size Option (only shown when enabled per product in Creator Studio) */}
+              {canScale && (
+                <div>
+                  <div className="font-mono text-xs uppercase tracking-wider text-[#8E95A5] mb-2">
+                    Skalierung / Größe
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {['Standard (100%)', 'Large (+25%)'].map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setSizeOption(opt)}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          sizeOption === opt
+                            ? 'bg-[#1B202C] border-[#FF5500] text-white'
+                            : 'bg-[#141720] border-white/[0.08] text-[#9DA4B4] hover:border-white/20'
+                        }`}
+                      >
+                        <div className="text-xs font-semibold">{opt}</div>
+                        <div className="font-mono text-[11px] text-[#7D8596] mt-0.5">
+                          {opt === 'Standard (100%)'
+                            ? formatEUR(product.price)
+                            : formatEUR(Math.round(product.price * 1.25 * 100) / 100)}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {['Standard (100%)', 'Large (+25%)'].map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setSizeOption(opt)}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                        sizeOption === opt
-                          ? 'bg-[#1B202C] border-[#FF5500] text-white'
-                          : 'bg-[#141720] border-white/[0.08] text-[#9DA4B4] hover:border-white/20'
-                      }`}
-                    >
-                      <div className="text-xs font-semibold">{opt}</div>
-                      <div className="font-mono text-[11px] text-[#7D8596] mt-0.5">
-                        {opt === 'Standard (100%)'
-                          ? formatEUR(product.price)
-                          : formatEUR(Math.round(product.price * 1.25 * 100) / 100)}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Bottom Add to Cart Action */}

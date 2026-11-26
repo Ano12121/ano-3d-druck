@@ -70,6 +70,7 @@ const EMPTY_FORM = {
   stockCount: '5',
   leadTime: '2–3 Werktage',
   featured: true,
+  allowScaling: false,
 };
 
 export default function CreatorStudioModal({
@@ -314,6 +315,7 @@ export default function CreatorStudioModal({
       stockCount: String(product.stockCount ?? 5),
       leadTime: product.leadTime || '2–3 Werktage',
       featured: Boolean(product.featured),
+      allowScaling: Boolean(product.allowScaling),
     });
     setExistingImages(product.images || []);
     setExistingModelUrl(product.modelUrl || null);
@@ -1257,8 +1259,8 @@ export default function CreatorStudioModal({
                 </div>
               </div>
 
-              {/* Stock, Badge & Hero Toggle */}
-              <div className="grid sm:grid-cols-4 gap-4 items-end">
+              {/* Stock & Badge */}
+              <div className="grid sm:grid-cols-3 gap-4 items-end">
                 <div>
                   <label className="block text-xs font-mono text-[#9DA4B4] mb-1.5">
                     Verfügbarkeit
@@ -1315,15 +1317,40 @@ export default function CreatorStudioModal({
                     <option value="Custom Color">Custom Color</option>
                   </select>
                 </div>
+              </div>
 
-                <label className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-[#141720] border border-white/[0.1] cursor-pointer text-xs text-white">
+              {/* Product Option Toggles (Hero & +25% Scaling) */}
+              <div className="grid sm:grid-cols-2 gap-3">
+                <label className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#141720] border border-white/[0.1] hover:border-white/[0.2] cursor-pointer transition-colors">
                   <input
                     type="checkbox"
                     checked={form.featured}
                     onChange={(e) => setForm({ ...form, featured: e.target.checked })}
-                    className="accent-[#FF5500] w-4 h-4"
+                    className="accent-[#FF5500] w-4 h-4 shrink-0"
                   />
-                  <span>Im Hero hervorheben</span>
+                  <div>
+                    <div className="text-xs font-semibold text-white">Im Hero hervorheben</div>
+                    <div className="text-[11px] text-[#7D8596]">
+                      Wird ganz oben auf der Startseite groß gezeigt
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#141720] border border-white/[0.1] hover:border-white/[0.2] cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={form.allowScaling}
+                    onChange={(e) => setForm({ ...form, allowScaling: e.target.checked })}
+                    className="accent-[#FF5500] w-4 h-4 shrink-0"
+                  />
+                  <div>
+                    <div className="text-xs font-semibold text-white">
+                      Größer (+25%) für Käufer erlauben
+                    </div>
+                    <div className="text-[11px] text-[#7D8596]">
+                      Nur aktivieren, wenn das Modell skalierbar ist (z. B. Deko)
+                    </div>
+                  </div>
                 </label>
               </div>
 

@@ -703,6 +703,7 @@ app.post('/api/products', requireAdmin, productUploadFields, async (req, res) =>
     stockCount: Math.max(0, parseInt(req.body.stockCount, 10) || 1),
     leadTime: (req.body.leadTime || '2–3 Tage').trim(),
     featured: req.body.featured === 'true' || req.body.featured === true,
+    allowScaling: req.body.allowScaling === 'true' || req.body.allowScaling === true,
     published: req.body.published !== 'false' && req.body.published !== false,
     likes: 0,
     createdAt: new Date().toISOString(),
@@ -776,6 +777,10 @@ app.put('/api/products/:id', requireAdmin, productUploadFields, async (req, res)
       req.body.featured !== undefined
         ? req.body.featured === 'true' || req.body.featured === true
         : existing.featured,
+    allowScaling:
+      req.body.allowScaling !== undefined
+        ? req.body.allowScaling === 'true' || req.body.allowScaling === true
+        : Boolean(existing.allowScaling),
     published:
       req.body.published !== undefined
         ? req.body.published === 'true' || req.body.published === true
@@ -849,8 +854,12 @@ app.post('/api/orders', async (req, res) => {
   let subtotal = 0;
   const cleanItems = items.map((item) => {
     const product = store.products.find((p) => p.id === item.productId);
-    const sizeMultiplier =
-      item.sizeOption === 'Groß (+25%)' || item.sizeOption === 'Large (+25%)' ? 1.25 : 1;
+    const wantsLarge =
+      item.sizeOption === 'Groß (+25%)' || item.sizeOption === 'Large (+25%)';
+    const allowLarge = product ? Boolean(product.allowScaling) : true;
+    const effectiveSizeOption =
+      wantsLarge && allowLarge ? item.sizeOption : 'Standard (100%)';
+    const sizeMultiplier = wantsLarge && allowLarge ? 1.25 : 1;
     const basePrice = product ? product.price : Number(item.unitPrice) || 0;
     const unitPrice = Math.round(basePrice * sizeMultiplier * 100) / 100;
     const quantity = Math.max(1, parseInt(item.quantity, 10) || 1);
@@ -867,7 +876,7 @@ app.post('/api/orders', async (req, res) => {
       colorId: item.colorId || 'matt-schwarz',
       colorName: item.colorName || 'Matt-Schwarz',
       colorHex: item.colorHex || '#1A1C22',
-      sizeOption: item.sizeOption || 'Standard (100%)',
+      sizeOption: effectiveSizeOption,
       quantity,
       unitPrice,
     };
