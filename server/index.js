@@ -469,10 +469,12 @@ app.post(
     } catch (err) {
       const msg = err.message || 'Unbekannter Fehler';
       const friendly =
-        msg.includes('customer_verification_required') || msg.includes('credit card')
-          ? 'Vercel AI Gateway verlangt einmalig eine hinterlegte Karte für die kostenlosen Credits (vercel.com → AI Gateway). Alternativ ohne Kreditkarte: einfach kostenlosen Key von aistudio.google.com/apikey oben über „+ Key ändern“ einfügen!'
+        msg.includes('limit: 0') || msg.includes('exceeded your current quota')
+          ? 'Google blockiert Bild-Generierung im kostenlosen API-Tarif (limit: 0 — dein normales Gemini-Abo zählt dort leider nicht mit). Nutz einfach den Button „Prompt kopieren & in Gemini öffnen“ (0 € mit deinem Gemini-Abo) oder aktiviere API-Billing in aistudio.google.com.'
+          : msg.includes('customer_verification_required') || msg.includes('credit card')
+          ? 'Vercel AI Gateway verlangt einmalig eine hinterlegte Karte für die kostenlosen Credits. Nutz einfach „Prompt kopieren & in Gemini öffnen“ oder den „Sofort-Studio-Look“!'
           : msg.includes('insufficient_funds') || msg.includes('402')
-          ? 'Vercel AI Gateway Credits sind aufgebraucht — lade Credits auf oder hinterlege oben einen eigenen Gemini API-Key.'
+          ? 'Credits aufgebraucht — nutz einfach „Prompt kopieren & in Gemini öffnen“ oder den „Sofort-Studio-Look“!'
           : `KI-Bildgenerierung fehlgeschlagen: ${msg}`;
       res.status(502).json({ error: friendly });
     }

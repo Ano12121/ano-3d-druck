@@ -33,26 +33,45 @@ const STYLE_PRESETS = [
     name: 'Dark Obsidian Studio',
     desc: 'Dunkler Schiefer & Signal-Orange Rim-Light (Shop-Look)',
     swatch: 'linear-gradient(135deg, #0D0F14 0%, #1F2330 65%, #FF5500 100%)',
+    promptDe:
+      'Behalte exakt mein 3D-gedrucktes Objekt aus dem Foto mit seiner echten Form und feinen realistischen PLA-Schichtlinien. Platziere es auf einer dunklen matten Schiefer-Oberfläche in einem modernen dunklen Design-Fotostudio. Dramatisches seitliches Kantenlicht (Rim-Light) mit leichtem warmem orangem Akzent-Schimmer, sauberer Schatten, tiefdunkler Hintergrund, gestochen scharfe Produktfotografie im 4:3-Format, kein Text, kein Wasserzeichen.',
   },
   {
     id: 'cyber-galaxy',
     name: 'Cyber Neon Desk',
     desc: 'Dunkles Alu & Blau-Lila / Cyan Ambient-Glow',
     swatch: 'linear-gradient(135deg, #0B0D14 0%, #4F46E5 60%, #38BDF8 100%)',
+    promptDe:
+      'Behalte exakt mein 3D-gedrucktes Objekt aus dem Foto mit seiner echten Form und realistischen PLA-Textur. Platziere es auf einem dunklen gebürsteten Aluminium-Schreibtisch in einem modernen Tech-Studio. Dramatisches Rim-Light mit dezentem blau-lila und eisblauem Ambient-Schimmer, gestochen scharfe Produktfotografie im 4:3-Format, kein Text, kein Wasserzeichen.',
   },
   {
     id: 'warm-atelier',
     name: 'Architektur-Beton Warm',
     desc: 'Dunkler Betonsockel & warmes Galerie-Spotlight',
     swatch: 'linear-gradient(135deg, #151412 0%, #3F372E 60%, #F59E0B 100%)',
+    promptDe:
+      'Behalte exakt mein 3D-gedrucktes Objekt aus dem Foto mit seiner echten Form und feinen PLA-Schichtlinien. Platziere es auf einem dunklen matten Betonsockel in einem minimalistischen Studio. Warmes goldenes Spotlight von der Seite mit weichen skulpturalen Schatten, dunkler edler Hintergrund, 4:3 Produktfotografie, kein Text, kein Wasserzeichen.',
   },
   {
     id: 'clean-gallery',
     name: 'Minimalist Hell-Grau',
     desc: 'Heller Design-Sockel — mega Kontrast für Matt-Schwarz',
     swatch: 'linear-gradient(135deg, #E5E7EB 0%, #CBD5E1 60%, #94A3B8 100%)',
+    promptDe:
+      'Behalte exakt mein 3D-gedrucktes Objekt aus dem Foto mit seiner echten Form und realistischen PLA-Textur. Platziere es auf einem minimalistischen hellgrauen Design-Podest mit weichem Tageslicht-Studiolicht, sanftem Schatten, kontrastreiche Boutique-Produktfotografie im 4:3-Format, kein Text, kein Wasserzeichen.',
   },
 ];
+
+const COLOR_NOTES_DE = {
+  original: 'Behalte die Originalfarbe des 3D-Drucks genau bei.',
+  'matt-schwarz': 'Stelle das 3D-gedruckte Objekt in edlem tiefmattem Schwarz (PLA Matte) dar.',
+  'matt-weiss': 'Stelle das 3D-gedruckte Objekt in sauberem warmem Matt-Weiß (PLA Matte) dar.',
+  'rot-schwarz':
+    'Stelle das 3D-gedruckte Objekt in zweifarbig gemixtem Rot-Schwarz Dual-Color PLA dar, das je nach Winkel zwischen sattem Rot und Tiefschwarz schimmert.',
+  'galaxy-blau-lila':
+    'Stelle das 3D-gedruckte Objekt in schimmerndem Galaxy Blau-Lila PLA mit feinem kosmischem Glanz dar.',
+  pink: 'Stelle das 3D-gedruckte Objekt in kräftigem, sattem Studio-Pink PLA dar.',
+};
 
 export default function PhotoStudioTab({
   geminiConfigured,
@@ -80,8 +99,27 @@ export default function PhotoStudioTab({
   const [savingKey, setSavingKey] = useState(false);
 
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   const mobileUrl = lanUrls?.[0] || window.location.origin;
+
+  const buildGeminiAppPrompt = () => {
+    const preset = STYLE_PRESETS.find((p) => p.id === style) || STYLE_PRESETS[0];
+    const colorLine = COLOR_NOTES_DE[colorOverride] || COLOR_NOTES_DE.original;
+    const extra = customNote.trim() ? ` Extra Wunsch: ${customNote.trim()}.` : '';
+    return `${preset.promptDe} ${colorLine}${extra}`;
+  };
+
+  const handleCopyPromptAndOpenGemini = (openGemini = true) => {
+    const prompt = buildGeminiAppPrompt();
+    navigator.clipboard?.writeText(prompt);
+    setCopiedPrompt(true);
+    setTimeout(() => setCopiedPrompt(false), 2500);
+    onShowToast('Studio-Prompt kopiert! Einfach in Gemini dein Foto + Strg+V einfügen.');
+    if (openGemini) {
+      window.open('https://gemini.google.com/app', '_blank', 'noopener,noreferrer');
+    }
+  };
 
   const pickFile = (file) => {
     if (!file || !file.type.startsWith('image/')) {
@@ -515,58 +553,87 @@ export default function PhotoStudioTab({
             />
           </div>
 
-          {/* 3 Action Buttons */}
+          {/* Action Buttons */}
           <div className="space-y-2.5 pt-1">
-            <button
-              type="button"
-              disabled={Boolean(busyMode) || !rawFile}
-              onClick={() => runGeminiOrInbox('gemini')}
-              className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-5 rounded-xl bg-gradient-to-r from-[#FF5500] to-[#FF7A26] hover:brightness-110 disabled:opacity-45 text-white font-semibold text-sm shadow-[0_10px_28px_rgba(255,85,0,0.28)] transition-all cursor-pointer"
-            >
-              {busyMode === 'gemini' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>KI erstellt dein Studio-Foto (ca. 10–20 Sek.)...</span>
-                </>
-              ) : (
-                <>
+            {/* Primary 0 EUR workflow using user's existing Gemini Premium subscription */}
+            <div className="p-3.5 rounded-xl bg-gradient-to-r from-[#FF5500]/15 via-[#181C28] to-[#38BDF8]/15 border border-[#FF5500]/45 space-y-2.5">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="font-semibold text-white">
+                  0 € mit deinem Gemini Premium (gemini.google.com)
+                </span>
+                <span className="font-mono text-[10px] text-emerald-400">EMPFOHLEN</span>
+              </div>
+              <p className="text-[11px] text-[#B8BFCE] leading-relaxed">
+                Kopiert dir den perfekten Studio-Prompt für deinen gewählten Stil & öffnet dein
+                Gemini. Dort einfach Handyfoto anhängen + <strong className="text-white">Strg+V</strong> → fertiges Studio-Bild speichern & direkt in den Shop-Upload ziehen!
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCopyPromptAndOpenGemini(true)}
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#FF5500] hover:bg-[#FF6B1F] text-white font-semibold text-xs shadow-lg cursor-pointer"
+                >
                   <Sparkles className="w-4 h-4" />
                   <span>
-                    {geminiConfigured
-                      ? 'Mit Gemini KI in Studio-Foto verwandeln'
-                      : 'Mit Gemini KI verwandeln (Key oben eintragen)'}
+                    {copiedPrompt
+                      ? 'Prompt kopiert — Gemini öffnet sich!'
+                      : 'Prompt kopieren & Gemini öffnen'}
                   </span>
-                </>
-              )}
-            </button>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCopyPromptAndOpenGemini(false)}
+                  className="inline-flex items-center gap-1.5 py-2.5 px-3.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.14] text-white text-xs font-mono cursor-pointer"
+                >
+                  {copiedPrompt ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>Nur kopieren</span>
+                </button>
+              </div>
+            </div>
 
-            <div className="grid sm:grid-cols-2 gap-2.5">
+            <div className="grid sm:grid-cols-3 gap-2">
               <button
                 type="button"
                 disabled={Boolean(busyMode) || !rawFile}
                 onClick={runLocalStudioFilter}
-                className="inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#191E2B] hover:bg-[#232A3C] disabled:opacity-45 border border-white/[0.12] text-white text-xs font-semibold cursor-pointer"
+                className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#191E2B] hover:bg-[#232A3C] disabled:opacity-45 border border-white/[0.12] text-white text-xs font-semibold cursor-pointer"
               >
                 {busyMode === 'local' ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <Wand2 className="w-4 h-4 text-[#38BDF8]" />
+                  <Wand2 className="w-3.5 h-3.5 text-[#38BDF8]" />
                 )}
-                <span>Sofort-Studio-Look (ohne Key)</span>
+                <span>Sofort-Look (4:3)</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={Boolean(busyMode) || !rawFile}
+                onClick={() => runGeminiOrInbox('gemini')}
+                className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#191E2B] hover:bg-[#232A3C] disabled:opacity-45 border border-white/[0.12] text-white text-xs font-semibold cursor-pointer"
+                title="Nutzt Gemini API-Billing (Pay-as-you-go)"
+              >
+                {busyMode === 'gemini' ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 text-[#FF7326]" />
+                )}
+                <span>Direkt per API</span>
               </button>
 
               <button
                 type="button"
                 disabled={Boolean(busyMode) || !rawFile}
                 onClick={() => runGeminiOrInbox('raw-inbox')}
-                className="inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#151822] hover:bg-[#1E2331] disabled:opacity-45 border border-[#FF5500]/35 text-[#FFB088] text-xs font-semibold cursor-pointer"
+                className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#151822] hover:bg-[#1E2331] disabled:opacity-45 border border-white/[0.1] text-[#C4CAD6] text-xs font-semibold cursor-pointer"
               >
                 {busyMode === 'raw-inbox' ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <Inbox className="w-4 h-4 text-[#FF5500]" />
+                  <Inbox className="w-3.5 h-3.5 text-[#FF5500]" />
                 )}
-                <span>In Rohfoto-Inbox für Antigravity legen</span>
+                <span>Rohfoto-Inbox</span>
               </button>
             </div>
           </div>
