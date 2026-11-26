@@ -1,16 +1,22 @@
 const API_BASE = '/api';
-const TOKEN_KEY = 'layerlab_admin_token';
+const TOKEN_KEY = 'ano_admin_token';
+const GEMINI_LOCAL_KEY = 'ano_gemini_api_key';
 
 export function getAdminToken() {
-  return localStorage.getItem(TOKEN_KEY) || '';
+  return localStorage.getItem(TOKEN_KEY) || localStorage.getItem('layerlab_admin_token') || '';
 }
 
 export function setAdminToken(token) {
+  localStorage.removeItem('layerlab_admin_token');
   if (token) {
     localStorage.setItem(TOKEN_KEY, token);
   } else {
     localStorage.removeItem(TOKEN_KEY);
   }
+}
+
+export function getSavedBrowserGeminiKey() {
+  return localStorage.getItem(GEMINI_LOCAL_KEY) || '';
 }
 
 function authHeaders(extra = {}) {
@@ -70,7 +76,9 @@ export async function changeAdminPin(currentPin, newPin) {
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ currentPin, newPin }),
   });
-  return handleResponse(res);
+  const data = await handleResponse(res);
+  if (data.token) setAdminToken(data.token);
+  return data;
 }
 
 export async function createProduct(formData) {
@@ -83,7 +91,7 @@ export async function createProduct(formData) {
 }
 
 export async function updateProduct(id, formData) {
-  const res = await fetch(`${API_BASE}/products/${id}`, {
+  const res = await fetch(`${API_BASE}/products/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: authHeaders(),
     body: formData,
@@ -92,7 +100,7 @@ export async function updateProduct(id, formData) {
 }
 
 export async function deleteProduct(id) {
-  const res = await fetch(`${API_BASE}/products/${id}`, {
+  const res = await fetch(`${API_BASE}/products/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
@@ -100,7 +108,7 @@ export async function deleteProduct(id) {
 }
 
 export async function likeProduct(id) {
-  const res = await fetch(`${API_BASE}/products/${id}/like`, {
+  const res = await fetch(`${API_BASE}/products/${encodeURIComponent(id)}/like`, {
     method: 'POST',
   });
   return handleResponse(res);
@@ -112,13 +120,6 @@ export async function createOrder(payload) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  return handleResponse(res);
-}
-
-export async function verifyStripeOrder(orderId, sessionId) {
-  const res = await fetch(
-    `${API_BASE}/checkout/verify-stripe?order_id=${encodeURIComponent(orderId)}&session_id=${encodeURIComponent(sessionId || '')}`
-  );
   return handleResponse(res);
 }
 
@@ -164,6 +165,14 @@ export async function updateInquiryStatus(id, status) {
   return handleResponse(res);
 }
 
+export async function deleteInquiry(id) {
+  const res = await fetch(`${API_BASE}/inquiries/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  return handleResponse(res);
+}
+
 export async function updateStudioSettings(payload) {
   const res = await fetch(`${API_BASE}/studio`, {
     method: 'PUT',
@@ -171,12 +180,6 @@ export async function updateStudioSettings(payload) {
     body: JSON.stringify(payload),
   });
   return handleResponse(res);
-}
-
-const GEMINI_LOCAL_KEY = 'ano_gemini_api_key';
-
-export function getSavedBrowserGeminiKey() {
-  return localStorage.getItem(GEMINI_LOCAL_KEY) || '';
 }
 
 export async function saveGeminiApiKey(apiKey) {

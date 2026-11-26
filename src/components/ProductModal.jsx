@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import {
   X,
   ShoppingBag,
@@ -17,7 +17,8 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { formatEUR, getFilamentById } from '../data/filaments';
-import ModelViewer3D from './ModelViewer3D';
+
+const ModelViewer3D = lazy(() => import('./ModelViewer3D'));
 
 export default function ProductModal({
   product,
@@ -127,20 +128,28 @@ export default function ProductModal({
             )}
 
             {viewMode === '3d' && has3D ? (
-              <ModelViewer3D
-                modelUrl={product.modelUrl}
-                demoModel={product.demoModel}
-                colorHex={selectedFilament.hex}
-                secondaryHex={selectedFilament.secondaryHex}
-                finish={selectedFilament.finish}
-                scaleFactor={sizeOption === 'Large (+25%)' ? 1.15 : 1}
-                heightClass="h-[300px] sm:h-[340px]"
-                label={
-                  product.modelUrl
-                    ? `STL 3D-MODELL // ${selectedFilament.name.toUpperCase()}`
-                    : `INTERAKTIVES 3D-MESH // ${selectedFilament.name.toUpperCase()}`
+              <Suspense
+                fallback={
+                  <div className="h-[300px] sm:h-[340px] rounded-xl bg-[#090B10] border border-white/[0.1] flex items-center justify-center font-mono text-xs text-[#38BDF8]">
+                    3D-Viewer wird geladen...
+                  </div>
                 }
-              />
+              >
+                <ModelViewer3D
+                  modelUrl={product.modelUrl}
+                  demoModel={product.demoModel}
+                  colorHex={selectedFilament.hex}
+                  secondaryHex={selectedFilament.secondaryHex}
+                  finish={selectedFilament.finish}
+                  scaleFactor={sizeOption === 'Large (+25%)' ? 1.15 : 1}
+                  heightClass="h-[300px] sm:h-[340px]"
+                  label={
+                    product.modelUrl
+                      ? `STL 3D-MODELL // ${selectedFilament.name.toUpperCase()}`
+                      : `INTERAKTIVES 3D-MESH // ${selectedFilament.name.toUpperCase()}`
+                  }
+                />
+              </Suspense>
             ) : (
               <>
                 <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-[#090A0D] border border-white/[0.08]">

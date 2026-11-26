@@ -9,12 +9,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getInitialStore, hashPin, verifyPin } from './seed.js';
-import {
-  isSmtpConfigured,
-  sendOrderConfirmationEmail,
-  sendOrderStatusEmail,
-} from './mailer.js';
+import { buildEnvPinAuth, envPinDigest, getInitialStore, hashPin, verifyPin } from './seed.js';
 import {
   getLanUrls,
   isAiGatewayAvailable,
@@ -33,7 +28,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 3001;
-const WRITABLE_ROOT = IS_VERCEL ? path.join(os.tmpdir(), 'layerlab') : __dirname;
+const WRITABLE_ROOT = IS_VERCEL ? path.join(os.tmpdir(), 'ano-3d') : __dirname;
 const DATA_DIR = path.join(WRITABLE_ROOT, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
 const SECRETS_FILE = path.join(DATA_DIR, 'secrets.json');
@@ -90,24 +85,18 @@ function normalizeStore(store) {
     store.auth = defaults.auth;
   }
   const envPin = (process.env.ADMIN_PIN || '').trim();
-  if (
-    envPin &&
-    !verifyPin(envPin, store.auth.pinSalt, store.auth.pinHash) &&
-    (IS_VERCEL || store.auth.isDefaultPin)
-  ) {
-    const { salt, hash } = hashPin(envPin);
-    store.auth = { pinSalt: salt, pinHash: hash, isDefaultPin: false };
+  if (envPin) {
+    const currentDigest = envPinDigest(envPin);
+    if (store.auth.envPinDigest !== currentDigest) {
+      store.auth = buildEnvPinAuth(envPin);
+    }
   }
   if (!store.studio) {
     store.studio = defaults.studio;
   }
-  if (!store.studio.legal) {
-    store.studio.legal = defaults.studio.legal;
-  }
   if (!Array.isArray(store.products)) store.products = [];
   if (!Array.isArray(store.orders)) store.orders = [];
   if (!Array.isArray(store.inquiries)) store.inquiries = [];
-  if (!Array.isArray(store.emailLog)) store.emailLog = [];
   if (!Array.isArray(store.studioPhotos)) store.studioPhotos = [];
 
   store.products = store.products.map((p) => ({
@@ -164,7 +153,12 @@ async function writeStore(store) {
 
 // Stateless HMAC-SHA256 Admin Tokens (works seamlessly across Vercel Serverless & locally!)
 function getSigningKey(store) {
-  return process.env.AUTH_SECRET || store.auth?.pinHash || 'ano-local-secret';
+  const baseSecret =
+    process.env.AUTH_SECRET || process.env.BLOB_READ_WRITE_TOKEN || 'ano-local-secret';
+  return crypto
+    .createHash('sha256')
+    .update(`${baseSecret}:${store.auth?.pinHash || ''}`)
+    .digest('hex');
 }
 
 function createSessionToken(store) {
@@ -268,8 +262,6 @@ const upload = multer({
   },
 });
 
-const isStripeConfigured = () => Boolean(process.env.STRIPE_SECRET_KEY);
-
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
@@ -297,8 +289,6 @@ app.get('/api/auth/status', async (req, res) => {
   res.json({
     authenticated: isValidAdmin(req, store),
     isDefaultPin: Boolean(store.auth?.isDefaultPin),
-    stripeConfigured: isStripeConfigured(),
-    smtpConfigured: isSmtpConfigured(),
     blobConfigured: isBlobConfigured(),
   });
 });
@@ -335,9 +325,16 @@ app.post('/api/auth/change-pin', requireAdmin, async (req, res) => {
     return res.status(401).json({ error: 'Aktuelle PIN ist nicht korrekt.' });
   }
   const { salt, hash } = hashPin(String(newPin).trim());
-  store.auth = { pinSalt: salt, pinHash: hash, isDefaultPin: false };
+  const envPin = (process.env.ADMIN_PIN || '').trim();
+  store.auth = {
+    pinSalt: salt,
+    pinHash: hash,
+    isDefaultPin: false,
+    ...(envPin ? { envPinDigest: envPinDigest(envPin) } : {}),
+  };
   await writeStore(store);
-  res.json({ ok: true, isDefaultPin: false });
+  const token = createSessionToken(store);
+  res.json({ ok: true, token, isDefaultPin: false });
 });
 
 // ===================== PUBLIC BOOTSTRAP =====================
@@ -349,15 +346,12 @@ app.get('/api/bootstrap', async (req, res) => {
     products: store.products,
     authenticated: authed,
     isDefaultPin: Boolean(store.auth?.isDefaultPin),
-    stripeConfigured: isStripeConfigured(),
-    smtpConfigured: isSmtpConfigured(),
     blobConfigured: isBlobConfigured(),
     geminiConfigured: Boolean(getGeminiApiKey() || isAiGatewayAvailable()),
     directGeminiConfigured: Boolean(getGeminiApiKey()),
     lanUrls: authed ? getLanUrls(5173) : [],
     orders: authed ? store.orders : [],
     inquiries: authed ? store.inquiries : [],
-    emailLog: authed ? store.emailLog : [],
     studioPhotos: authed ? store.studioPhotos || [] : [],
   });
 });
@@ -370,11 +364,8 @@ app.get('/api/admin/dashboard', requireAdmin, async (req, res) => {
     products: store.products,
     orders: store.orders,
     inquiries: store.inquiries,
-    emailLog: store.emailLog || [],
     studioPhotos: store.studioPhotos || [],
     isDefaultPin: Boolean(store.auth?.isDefaultPin),
-    stripeConfigured: isStripeConfigured(),
-    smtpConfigured: isSmtpConfigured(),
     blobConfigured: isBlobConfigured(),
     geminiConfigured: Boolean(getGeminiApiKey() || isAiGatewayAvailable()),
     directGeminiConfigured: Boolean(getGeminiApiKey()),
@@ -797,14 +788,8 @@ app.post('/api/orders', async (req, res) => {
   };
 
   store.orders.unshift(order);
-
-  if (order.customer.email && order.customer.email.includes('@')) {
-    const mailEntry = await sendOrderConfirmationEmail(order, store.studio);
-    store.emailLog = [mailEntry, ...(store.emailLog || [])].slice(0, 60);
-  }
-
   await writeStore(store);
-  res.status(201).json({ order, checkoutUrl: null });
+  res.status(201).json({ order });
 });
 
 app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
@@ -819,10 +804,6 @@ app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Ungültiger Status.' });
     }
     order.status = req.body.status;
-    if (order.customer?.email && order.customer.email.includes('@')) {
-      const mailEntry = await sendOrderStatusEmail(order, store.studio);
-      store.emailLog = [mailEntry, ...(store.emailLog || [])].slice(0, 60);
-    }
   }
   if (req.body.paymentStatus) {
     order.paymentStatus = req.body.paymentStatus;
@@ -903,6 +884,17 @@ app.patch('/api/inquiries/:id', requireAdmin, async (req, res) => {
   res.json(inq);
 });
 
+app.delete('/api/inquiries/:id', requireAdmin, async (req, res) => {
+  const store = req._store;
+  const idx = store.inquiries.findIndex((i) => i.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: 'Anfrage nicht gefunden.' });
+  }
+  const [removed] = store.inquiries.splice(idx, 1);
+  await writeStore(store);
+  res.json({ deleted: removed.id });
+});
+
 // ===================== STUDIO SETTINGS =====================
 app.put('/api/studio', requireAdmin, async (req, res) => {
   const store = req._store;
@@ -912,10 +904,6 @@ app.put('/api/studio', requireAdmin, async (req, res) => {
     printerStatus: {
       ...store.studio.printerStatus,
       ...(req.body.printerStatus || {}),
-    },
-    legal: {
-      ...store.studio.legal,
-      ...(req.body.legal || {}),
     },
   };
   await writeStore(store);

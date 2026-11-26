@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import {
   Upload,
   CheckCircle2,
@@ -10,8 +10,8 @@ import {
 } from 'lucide-react';
 import { FILAMENTS, formatEUR } from '../data/filaments';
 import { createInquiry } from '../api';
-import { parseStlArrayBuffer, estimateStlPrint } from '../utils/stlPricing';
-import ModelViewer3D from './ModelViewer3D';
+
+const ModelViewer3D = lazy(() => import('./ModelViewer3D'));
 
 export default function CustomPrintSection({ onInquiryCreated }) {
   const [name, setName] = useState('');
@@ -25,6 +25,7 @@ export default function CustomPrintSection({ onInquiryCreated }) {
   const [imagePreview, setImagePreview] = useState(null);
   const [stlFile, setStlFile] = useState(null);
   const [parsedStl, setParsedStl] = useState(null);
+  const [estimate, setEstimate] = useState(null);
   const [dragActive, setDragActive] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
@@ -34,30 +35,27 @@ export default function CustomPrintSection({ onInquiryCreated }) {
   const selectedFilament =
     FILAMENTS.find((f) => f.id === colorId) || FILAMENTS[0];
 
-  const estimate = useMemo(
-    () =>
-      parsedStl
-        ? estimateStlPrint({
-            parsed: parsedStl,
-            material: 'PLA',
-            infillPercent: 15,
-            layerHeight: '0.16 mm',
-            scalePercent: 100,
-          })
-        : null,
-    [parsedStl]
-  );
-
   const handlePickedFile = async (picked) => {
     if (!picked) return;
     setError('');
 
     if (picked.name.toLowerCase().endsWith('.stl')) {
       try {
-        const buf = await picked.arrayBuffer();
+        const [{ parseStlArrayBuffer, estimateStlPrint }, buf] = await Promise.all([
+          import('../utils/stlPricing'),
+          picked.arrayBuffer(),
+        ]);
         const parsed = parseStlArrayBuffer(buf);
+        const est = estimateStlPrint({
+          parsed,
+          material: 'PLA',
+          infillPercent: 15,
+          layerHeight: '0.16 mm',
+          scalePercent: 100,
+        });
         setStlFile(picked);
         setParsedStl(parsed);
+        setEstimate(est);
         setImageFile(null);
         setImagePreview(null);
       } catch {
@@ -71,6 +69,7 @@ export default function CustomPrintSection({ onInquiryCreated }) {
       setImagePreview(URL.createObjectURL(picked));
       setStlFile(null);
       setParsedStl(null);
+      setEstimate(null);
       return;
     }
 
@@ -82,6 +81,7 @@ export default function CustomPrintSection({ onInquiryCreated }) {
     setImagePreview(null);
     setStlFile(null);
     setParsedStl(null);
+    setEstimate(null);
   };
 
   const handleSubmit = async (e) => {
@@ -235,14 +235,22 @@ export default function CustomPrintSection({ onInquiryCreated }) {
                         <X className="w-3.5 h-3.5" /> Entfernen
                       </button>
                     </div>
-                    <ModelViewer3D
-                      geometry={parsedStl.geometry}
-                      colorHex={selectedFilament.hex}
-                      secondaryHex={selectedFilament.secondaryHex}
-                      finish={selectedFilament.finish}
-                      heightClass="h-56"
-                      label={`3D-VORSCHAU // ${selectedFilament.name.toUpperCase()}`}
-                    />
+                    <Suspense
+                      fallback={
+                        <div className="h-56 rounded-xl bg-[#090B10] border border-white/[0.1] flex items-center justify-center font-mono text-xs text-[#38BDF8]">
+                          3D-Vorschau wird geladen...
+                        </div>
+                      }
+                    >
+                      <ModelViewer3D
+                        geometry={parsedStl.geometry}
+                        colorHex={selectedFilament.hex}
+                        secondaryHex={selectedFilament.secondaryHex}
+                        finish={selectedFilament.finish}
+                        heightClass="h-56"
+                        label={`3D-VORSCHAU // ${selectedFilament.name.toUpperCase()}`}
+                      />
+                    </Suspense>
                     {estimate && (
                       <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-[#0B0D12] border border-white/[0.08] font-mono text-xs">
                         <span className="text-[#9DA4B4]">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Search,
   SlidersHorizontal,
@@ -7,7 +7,6 @@ import {
   Sparkles,
   CheckCircle2,
   Layers,
-  ShieldCheck,
   Truck,
 } from 'lucide-react';
 import { CATEGORIES, getFilamentById } from './data/filaments';
@@ -15,7 +14,6 @@ import {
   fetchBootstrap,
   fetchAdminDashboard,
   likeProduct,
-  verifyStripeOrder,
 } from './api';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -26,19 +24,16 @@ import FilamentShowcase from './components/FilamentShowcase';
 import CustomPrintSection from './components/CustomPrintSection';
 import OrderTrackerModal from './components/OrderTrackerModal';
 import CreatorStudioModal from './components/CreatorStudioModal';
-import LegalModal from './components/LegalModal';
 
 export default function App() {
   const [studio, setStudio] = useState(null);
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [inquiries, setInquiries] = useState([]);
-  const [emailLog, setEmailLog] = useState([]);
   const [studioPhotos, setStudioPhotos] = useState([]);
   const [authenticated, setAuthenticated] = useState(false);
-  const [isDefaultPin, setIsDefaultPin] = useState(true);
-  const [stripeConfigured, setStripeConfigured] = useState(false);
-  const [smtpConfigured, setSmtpConfigured] = useState(false);
+  const [isDefaultPin, setIsDefaultPin] = useState(false);
+  const [blobConfigured, setBlobConfigured] = useState(false);
   const [geminiConfigured, setGeminiConfigured] = useState(false);
   const [directGeminiConfigured, setDirectGeminiConfigured] = useState(false);
   const [lanUrls, setLanUrls] = useState([]);
@@ -56,54 +51,51 @@ export default function App() {
   const [studioOpen, setStudioOpen] = useState(false);
   const [trackerOpen, setTrackerOpen] = useState(false);
   const [trackerCode, setTrackerCode] = useState('');
-  const [legalTab, setLegalTab] = useState(null);
 
   // Persisted Local State (Cart & Likes)
   const [cart, setCart] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('layerlab_cart') || '[]');
+      return JSON.parse(localStorage.getItem('ano_cart') || localStorage.getItem('layerlab_cart') || '[]');
     } catch {
       return [];
     }
   });
   const [likedIds, setLikedIds] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('layerlab_likes') || '[]');
+      return JSON.parse(localStorage.getItem('ano_likes') || localStorage.getItem('layerlab_likes') || '[]');
     } catch {
       return [];
     }
   });
   const [toast, setToast] = useState(null);
 
-  const showToast = (msg) => {
+  const showToast = useCallback((msg) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 3400);
-  };
+    setTimeout(() => setToast(null), 3200);
+  }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const data = await fetchBootstrap();
       setStudio(data.studio);
       setProducts(data.products || []);
       setAuthenticated(Boolean(data.authenticated));
       setIsDefaultPin(Boolean(data.isDefaultPin));
-      setStripeConfigured(Boolean(data.stripeConfigured));
-      setSmtpConfigured(Boolean(data.smtpConfigured));
+      setBlobConfigured(Boolean(data.blobConfigured));
       setGeminiConfigured(Boolean(data.geminiConfigured));
       setDirectGeminiConfigured(Boolean(data.directGeminiConfigured));
       setLanUrls(data.lanUrls || []);
       setOrders(data.orders || []);
       setInquiries(data.inquiries || []);
-      setEmailLog(data.emailLog || []);
       setStudioPhotos(data.studioPhotos || []);
     } catch (err) {
       console.error('Bootstrap error:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleAuthChange = async (isAuthed) => {
+  const handleAuthChange = useCallback(async (isAuthed) => {
     setAuthenticated(isAuthed);
     if (isAuthed) {
       try {
@@ -112,8 +104,8 @@ export default function App() {
         setProducts(dash.products || []);
         setOrders(dash.orders || []);
         setInquiries(dash.inquiries || []);
-        setEmailLog(dash.emailLog || []);
         setStudioPhotos(dash.studioPhotos || []);
+        setBlobConfigured(Boolean(dash.blobConfigured));
         setGeminiConfigured(Boolean(dash.geminiConfigured));
         setDirectGeminiConfigured(Boolean(dash.directGeminiConfigured));
         setLanUrls(dash.lanUrls || []);
@@ -124,49 +116,29 @@ export default function App() {
     } else {
       setOrders([]);
       setInquiries([]);
-      setEmailLog([]);
       setStudioPhotos([]);
       setLanUrls([]);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
 
-    // Handle direct ?track=ANO-2026-XXXX shareable link
+    // Open live tracker directly from shared WhatsApp link (?track=ANO-2026-XXXX)
     const params = new URLSearchParams(window.location.search);
     const trackParam = params.get('track');
     if (trackParam) {
       setTrackerCode(trackParam.trim().toUpperCase());
       setTrackerOpen(true);
     }
-
-    // Handle Stripe redirect return
-    if (params.get('stripe_success') === '1' && params.get('order_id')) {
-      const orderId = params.get('order_id');
-      const sessionId = params.get('session_id');
-      verifyStripeOrder(orderId, sessionId)
-        .then(() => {
-          showToast(`Stripe-Zahlung erfolgreich! Auftrag ${orderId} ist bestätigt.`);
-          setTrackerCode(orderId);
-          setTrackerOpen(true);
-        })
-        .catch(() => {})
-        .finally(() => {
-          window.history.replaceState({}, '', window.location.pathname);
-        });
-    } else if (params.get('stripe_cancel') === '1') {
-      showToast('Stripe-Zahlung abgebrochen.');
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
-    localStorage.setItem('layerlab_cart', JSON.stringify(cart));
+    localStorage.setItem('ano_cart', JSON.stringify(cart));
   }, [cart]);
 
   useEffect(() => {
-    localStorage.setItem('layerlab_likes', JSON.stringify(likedIds));
+    localStorage.setItem('ano_likes', JSON.stringify(likedIds));
   }, [likedIds]);
 
   const handleAddToCart = (item) => {
@@ -252,7 +224,6 @@ export default function App() {
         (p) =>
           p.title.toLowerCase().includes(q) ||
           (p.subtitle || '').toLowerCase().includes(q) ||
-          (p.material || '').toLowerCase().includes(q) ||
           (p.category || '').toLowerCase().includes(q)
       );
     }
@@ -301,87 +272,90 @@ export default function App() {
             <div>
               <div className="inline-flex items-center gap-2 font-mono text-xs text-[#FF7326] uppercase tracking-widest mb-2">
                 <Layers className="w-4 h-4" />
-                <span>STUDIO KATALOG // KREATIONEN</span>
+                <span>KATALOG // 100% PLA</span>
               </div>
               <h2 className="font-display text-3xl sm:text-4xl font-bold text-white">
                 Frisch vom Druckbett
               </h2>
               <p className="text-sm sm:text-base text-[#9DA4B4] mt-1.5">
-                Entdecke jedes Design in 3D, wähle dein Lieblings-Filament & bestelle direkt vom Drucker.
+                Entdecke jedes Design, wähle deine Lieblings-PLA-Farbe & bestell direkt vom Drucker.
               </p>
             </div>
 
-            {/* Search & Sort Controls */}
-            <div className="flex flex-wrap items-center gap-2.5">
-              <div className="relative flex-1 sm:flex-none sm:w-64">
-                <Search className="w-4 h-4 text-[#7D8596] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Suche z.B. Lampe, Drache, Ständer..."
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#12151D] border border-white/[0.1] focus:border-[#FF5500] focus:outline-none text-xs sm:text-sm text-white"
-                />
+            {products.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="relative flex-1 sm:flex-none sm:w-64">
+                  <Search className="w-4 h-4 text-[#7D8596] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Suche z.B. Lampe, Drache, Ständer..."
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#12151D] border border-white/[0.1] focus:border-[#FF5500] focus:outline-none text-xs sm:text-sm text-white"
+                  />
+                </div>
+                <div className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[#12151D] border border-white/[0.1]">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-[#8E95A5]" />
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="bg-transparent text-xs sm:text-sm text-white focus:outline-none cursor-pointer"
+                  >
+                    <option value="featured" className="bg-[#12151D]">
+                      Empfohlen
+                    </option>
+                    <option value="popular" className="bg-[#12151D]">
+                      Beliebteste
+                    </option>
+                    <option value="price-asc" className="bg-[#12151D]">
+                      Preis aufsteigend
+                    </option>
+                    <option value="price-desc" className="bg-[#12151D]">
+                      Preis absteigend
+                    </option>
+                  </select>
+                </div>
               </div>
-              <div className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[#12151D] border border-white/[0.1]">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-[#8E95A5]" />
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="bg-transparent text-xs sm:text-sm text-white focus:outline-none cursor-pointer"
-                >
-                  <option value="featured" className="bg-[#12151D]">
-                    Empfohlen
-                  </option>
-                  <option value="popular" className="bg-[#12151D]">
-                    Beliebteste
-                  </option>
-                  <option value="price-asc" className="bg-[#12151D]">
-                    Preis aufsteigend
-                  </option>
-                  <option value="price-desc" className="bg-[#12151D]">
-                    Preis absteigend
-                  </option>
-                </select>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Category Filter Pills + Active Color Filter Tag */}
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-            <div className="flex flex-wrap items-center gap-2">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
-                    activeCategory === cat
-                      ? 'bg-[#FF5500] text-white shadow-[0_6px_20px_rgba(255,85,0,0.3)]'
-                      : 'bg-[#12151D] text-[#A5ACB8] hover:text-white border border-white/[0.08]'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
+          {products.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
+              <div className="flex flex-wrap items-center gap-2">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+                      activeCategory === cat
+                        ? 'bg-[#FF5500] text-white shadow-[0_6px_20px_rgba(255,85,0,0.3)]'
+                        : 'bg-[#12151D] text-[#A5ACB8] hover:text-white border border-white/[0.08]'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
 
-            {activeColorFilter && (
-              <button
-                onClick={() => setActiveColorFilter(null)}
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#1A1F2B] border border-[#FF5500]/50 text-xs font-mono text-white cursor-pointer"
-              >
-                <span
-                  className="w-3 h-3 rounded-full"
-                  style={{
-                    background:
-                      getFilamentById(activeColorFilter).swatch ||
-                      getFilamentById(activeColorFilter).hex,
-                  }}
-                />
-                <span>Farbe: {getFilamentById(activeColorFilter).name}</span>
-                <span className="text-[#FF7326]">✕</span>
-              </button>
-            )}
-          </div>
+              {activeColorFilter && (
+                <button
+                  onClick={() => setActiveColorFilter(null)}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#1A1F2B] border border-[#FF5500]/50 text-xs font-mono text-white cursor-pointer"
+                >
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{
+                      background:
+                        getFilamentById(activeColorFilter).swatch ||
+                        getFilamentById(activeColorFilter).hex,
+                    }}
+                  />
+                  <span>Farbe: {getFilamentById(activeColorFilter).name}</span>
+                  <span className="text-[#FF7326]">✕</span>
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Product Grid */}
           {loading ? (
@@ -389,7 +363,7 @@ export default function App() {
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="h-96 rounded-2xl bg-[#111318] border border-white/[0.06] animate-pulse"
+                  className="h-80 rounded-2xl bg-[#111318] border border-white/[0.06] animate-pulse"
                 />
               ))}
             </div>
@@ -403,7 +377,7 @@ export default function App() {
               <p className="text-sm text-[#8E95A5]">
                 {products.length === 0
                   ? 'Lad einfach im Creator Studio deine ersten eigenen Fotos hoch — oder schick unten einen 3D-Modell-Link.'
-                  : 'Setze die Filter zurück oder lade deine eigene neue Kreation im Creator Studio hoch!'}
+                  : 'Setze die Filter zurück oder lade eine neue Kreation im Creator Studio hoch!'}
               </p>
               <div className="flex flex-wrap justify-center gap-3 pt-2">
                 {products.length > 0 ? (
@@ -449,13 +423,13 @@ export default function App() {
             </div>
           )}
 
-          {/* Trust & Quality Strip */}
+          {/* Trust & Feature Strip */}
           <div className="grid sm:grid-cols-3 gap-4 mt-14">
             {[
               {
                 icon: Box,
                 title: 'Live in 3D anschauen',
-                desc: 'Dreh die Teile direkt im Browser und teste sofort alle 5 PLA-Farben live.',
+                desc: 'Dreh 3D-Modelle direkt im Browser und teste sofort alle 5 PLA-Farben live.',
               },
               {
                 icon: Sparkles,
@@ -500,13 +474,13 @@ export default function App() {
           }}
         />
 
-        {/* LIVE STL CALCULATOR & WUNSCHDRUCK SECTION */}
+        {/* SIMPLE CUSTOM PRINT REQUEST */}
         <CustomPrintSection
           onInquiryCreated={(inq) => {
             if (authenticated) {
               setInquiries((prev) => [inq, ...prev]);
             }
-            showToast(`Wunschdruck-Anfrage ${inq.id} erfolgreich gesendet!`);
+            showToast(`Wunschdruck-Anfrage ${inq.id} gesendet!`);
           }}
         />
       </main>
@@ -558,14 +532,13 @@ export default function App() {
       <CartDrawer
         open={cartOpen}
         cart={cart}
-        stripeConfigured={stripeConfigured}
         onClose={() => setCartOpen(false)}
         onUpdateQty={handleUpdateQty}
         onRemove={handleRemoveFromCart}
         onClearCart={() => setCart([])}
         onOrderCreated={(newOrder) => {
           if (authenticated) {
-            setOrders((prev) => [newOrder, ...prev]);
+            setOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== newOrder.id)]);
           }
           loadData();
         }}
@@ -573,7 +546,6 @@ export default function App() {
           setTrackerCode(code);
           setTrackerOpen(true);
         }}
-        onOpenLegal={(tab) => setLegalTab(tab)}
       />
 
       <OrderTrackerModal
@@ -586,8 +558,7 @@ export default function App() {
         open={studioOpen}
         authenticated={authenticated}
         isDefaultPin={isDefaultPin}
-        stripeConfigured={stripeConfigured}
-        smtpConfigured={smtpConfigured}
+        blobConfigured={blobConfigured}
         geminiConfigured={geminiConfigured}
         directGeminiConfigured={directGeminiConfigured}
         lanUrls={lanUrls}
@@ -595,7 +566,6 @@ export default function App() {
         products={products}
         orders={orders}
         inquiries={inquiries}
-        emailLog={emailLog}
         studioPhotos={studioPhotos}
         onClose={() => setStudioOpen(false)}
         onAuthChange={handleAuthChange}
@@ -603,14 +573,7 @@ export default function App() {
         onShowToast={showToast}
       />
 
-      <LegalModal
-        activeTab={legalTab}
-        studio={studio}
-        onChangeTab={(t) => setLegalTab(t)}
-        onClose={() => setLegalTab(null)}
-      />
-
-      {/* Floating Toast Notification (bottom-left so it never overlaps right Cart Drawer) */}
+      {/* Floating Toast Notification */}
       {toast && (
         <div className="fixed bottom-5 left-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-[#161A24] border border-[#FF5500]/60 text-white text-sm shadow-2xl">
           <CheckCircle2 className="w-4 h-4 text-[#FF5500] shrink-0" />

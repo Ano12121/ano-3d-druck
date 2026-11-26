@@ -100,9 +100,9 @@ export async function loadCloudStore(fallbackStore) {
             if (!raw) return;
             const privData = decryptVault(raw);
             if (!privData) return;
+            if (privData.auth?.pinHash) merged.auth = privData.auth;
             if (Array.isArray(privData.orders)) merged.orders = privData.orders;
             if (Array.isArray(privData.inquiries)) merged.inquiries = privData.inquiries;
-            if (Array.isArray(privData.emailLog)) merged.emailLog = privData.emailLog;
             if (Array.isArray(privData.studioPhotos)) merged.studioPhotos = privData.studioPhotos;
           })
       );
@@ -127,9 +127,9 @@ export async function saveCloudStore(store) {
   });
 
   const vaultPayload = encryptVault({
+    auth: store.auth || null,
     orders: store.orders || [],
     inquiries: store.inquiries || [],
-    emailLog: store.emailLog || [],
     studioPhotos: store.studioPhotos || [],
   });
 

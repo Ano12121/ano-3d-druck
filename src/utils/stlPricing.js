@@ -190,7 +190,7 @@ export function createSampleStlFile() {
   geo.dispose();
   nonIndexed.dispose();
 
-  return new File([buffer], 'layerlab-twisted-hex-holder.stl', {
+  return new File([buffer], 'ano-twisted-hex-holder.stl', {
     type: 'model/stl',
   });
 }

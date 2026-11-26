@@ -17,11 +17,9 @@ import {
   Unlock,
   LogOut,
   Box,
-  Mail,
   ShieldCheck,
   KeyRound,
   Download,
-  Scale,
   Camera,
   Share2,
   RefreshCw,
@@ -30,7 +28,6 @@ import PhotoStudioTab from './PhotoStudioTab';
 import {
   CATEGORIES,
   FILAMENTS,
-  MATERIALS,
   ORDER_STEPS,
   formatEUR,
 } from '../data/filaments';
@@ -44,6 +41,7 @@ import {
   updateOrderStatus,
   deleteOrder,
   updateInquiryStatus,
+  deleteInquiry,
   updateStudioSettings,
 } from '../api';
 
@@ -72,8 +70,7 @@ export default function CreatorStudioModal({
   open,
   authenticated,
   isDefaultPin,
-  stripeConfigured,
-  smtpConfigured,
+  blobConfigured,
   geminiConfigured,
   directGeminiConfigured,
   lanUrls,
@@ -81,7 +78,6 @@ export default function CreatorStudioModal({
   products,
   orders,
   inquiries,
-  emailLog,
   studioPhotos,
   onClose,
   onAuthChange,
@@ -111,7 +107,6 @@ export default function CreatorStudioModal({
   // PIN change form
   const [pinForm, setPinForm] = useState({ currentPin: '', newPin: '' });
   const [pinMsg, setPinMsg] = useState('');
-  const [expandedMailId, setExpandedMailId] = useState(null);
 
   useEffect(() => {
     if (studio) {
@@ -308,13 +303,24 @@ export default function CreatorStudioModal({
     }
   };
 
+  const handleDeleteInquiry = async (id) => {
+    if (!window.confirm(`Anfrage ${id} wirklich löschen?`)) return;
+    try {
+      await deleteInquiry(id);
+      await onRefresh();
+      onShowToast(`Anfrage ${id} gelöscht.`);
+    } catch (err) {
+      onShowToast(err.message);
+    }
+  };
+
   const handleSaveStudio = async (e) => {
     e.preventDefault();
     setSavingStudio(true);
     try {
       await updateStudioSettings(studioDraft);
       await onRefresh();
-      onShowToast('Studio-, Drucker- & Rechtsdaten gespeichert!');
+      onShowToast('Studio- & Drucker-Einstellungen gespeichert!');
     } catch (err) {
       onShowToast(err.message);
     } finally {
@@ -445,7 +451,7 @@ export default function CreatorStudioModal({
                 </span>
               </h2>
               <p className="font-mono text-[11px] text-[#7D8596]">
-                FOTOS & .STL UPLOAD • DRUCK-QUEUE • E-MAILS • RECHTLICHES
+                FOTOS & .STL UPLOAD • DRUCK-QUEUE • WUNSCHDRUCK
               </p>
             </div>
           </div>
@@ -457,7 +463,7 @@ export default function CreatorStudioModal({
                 { id: 'upload', label: editingId ? 'Bearbeiten' : 'Upload', icon: ImagePlus },
                 { id: 'manage', label: `Shop (${products.length})`, icon: Package },
                 { id: 'orders', label: `Aufträge (${orders.length})`, icon: ClipboardList },
-                { id: 'inbox', label: `STL & Mails (${inquiries.length})`, icon: Mail },
+                { id: 'inbox', label: `Wunschdruck (${inquiries.length})`, icon: Sparkles },
                 { id: 'settings', label: 'Studio & PIN', icon: Sliders },
               ].map((t) => {
                 const Icon = t.icon;
@@ -1257,29 +1263,28 @@ export default function CreatorStudioModal({
             </div>
           )}
 
-          {/* TAB 4: CUSTOM STL INQUIRIES & AUTO EMAIL OUTBOX */}
+          {/* TAB 4: CUSTOM PRINT INQUIRIES */}
           {tab === 'inbox' && (
-            <div className="grid lg:grid-cols-12 gap-6">
-              {/* Left: Custom Print Inquiries */}
-              <div className="lg:col-span-7 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-[#FF5500]" />
-                  <h3 className="font-display font-bold text-white">
-                    Wunschdruck & .STL-Anfragen ({inquiries.length})
-                  </h3>
-                </div>
+            <div className="max-w-4xl mx-auto space-y-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#FF5500]" />
+                <h3 className="font-display text-xl font-bold text-white">
+                  Wunschdruck & .STL-Anfragen ({inquiries.length})
+                </h3>
+              </div>
 
-                {inquiries.length === 0 ? (
-                  <div className="p-8 rounded-2xl bg-[#141720] border border-white/[0.08] text-center text-sm text-[#8E95A5]">
-                    Noch keine Custom-Anfragen.
-                  </div>
-                ) : (
-                  inquiries.map((inq) => (
+              {inquiries.length === 0 ? (
+                <div className="p-10 rounded-2xl bg-[#141720] border border-white/[0.08] text-center text-sm text-[#8E95A5]">
+                  Noch keine Wunschdruck-Anfragen eingegangen.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {inquiries.map((inq) => (
                     <div
                       key={inq.id}
                       className="p-4 rounded-2xl bg-[#141720] border border-white/[0.08] space-y-3"
                     >
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <div className="font-mono text-xs text-[#38BDF8]">{inq.id}</div>
                           <h4 className="font-display font-bold text-white mt-0.5">
@@ -1291,29 +1296,39 @@ export default function CreatorStudioModal({
                             PLA • {inq.colorName}
                           </div>
                         </div>
-                        <select
-                          value={inq.status}
-                          onChange={(e) => handleInquiryStatus(inq.id, e.target.value)}
-                          className="px-2.5 py-1.5 rounded-lg bg-[#0B0D12] border border-white/[0.12] text-xs font-mono text-white"
-                        >
-                          <option value="offen">Offen</option>
-                          <option value="angebot_gesendet">Angebot gesendet</option>
-                          <option value="in_arbeit">In Arbeit</option>
-                          <option value="abgeschlossen">Abgeschlossen</option>
-                        </select>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={inq.status}
+                            onChange={(e) => handleInquiryStatus(inq.id, e.target.value)}
+                            className="px-2.5 py-1.5 rounded-lg bg-[#0B0D12] border border-white/[0.12] text-xs font-mono text-white"
+                          >
+                            <option value="offen">Offen</option>
+                            <option value="angebot_gesendet">Besprochen</option>
+                            <option value="in_arbeit">Im Drucker</option>
+                            <option value="abgeschlossen">Fertig</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteInquiry(inq.id)}
+                            className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 cursor-pointer"
+                            title="Anfrage löschen"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
 
                       {inq.stlMetrics && (
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2.5 rounded-xl bg-[#0B0D12] border border-[#FF5500]/30 font-mono text-[11px]">
                           <div>
-                            <span className="text-[#7D8596] block text-[9px]">RICHTPREIS</span>
+                            <span className="text-[#7D8596] block text-[9px]">CA. PREIS</span>
                             <span className="text-[#FF7326] font-bold">
                               {formatEUR(inq.stlMetrics.estimatedPrice)}
                             </span>
                           </div>
                           <div>
                             <span className="text-[#7D8596] block text-[9px]">GEWICHT</span>
-                            <span className="text-white">{inq.stlMetrics.estimatedGrams} g</span>
+                            <span className="text-white">{inq.stlMetrics.estimatedGrams} g PLA</span>
                           </div>
                           <div>
                             <span className="text-[#7D8596] block text-[9px]">DRUCKZEIT</span>
@@ -1350,14 +1365,9 @@ export default function CreatorStudioModal({
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#38BDF8]/15 text-[#38BDF8] hover:underline"
                           >
-                            <span>3D-Modell Link</span>
+                            <span>3D-Modell Link öffnen</span>
                             <ExternalLink className="w-3 h-3" />
                           </a>
-                        )}
-                        {inq.dimensions && !inq.stlMetrics && (
-                          <span className="px-2.5 py-1 rounded-md bg-[#0B0D12] font-mono text-[#9DA4B4]">
-                            Maße: {inq.dimensions}
-                          </span>
                         )}
                       </div>
 
@@ -1365,86 +1375,21 @@ export default function CreatorStudioModal({
                         <img
                           src={inq.referenceImage}
                           alt="Referenzbild"
-                          className="w-28 h-20 rounded-lg object-cover border border-white/[0.1]"
+                          className="w-32 h-24 rounded-lg object-cover border border-white/[0.1]"
                         />
                       )}
                     </div>
-                  ))
-                )}
-              </div>
-
-              {/* Right: Automatic Order & Status Email Outbox */}
-              <div className="lg:col-span-5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-[#38BDF8]" />
-                    <h3 className="font-display font-bold text-white">
-                      E-Mail-Ausgang ({emailLog.length})
-                    </h3>
-                  </div>
-                  <span
-                    className={`font-mono text-[10px] px-2 py-0.5 rounded ${
-                      smtpConfigured
-                        ? 'bg-emerald-500/15 text-emerald-400'
-                        : 'bg-white/[0.06] text-[#9DA4B4]'
-                    }`}
-                  >
-                    {smtpConfigured ? 'SMTP Live' : 'Vorschau-Modus'}
-                  </span>
+                  ))}
                 </div>
-
-                {emailLog.length === 0 ? (
-                  <div className="p-6 rounded-2xl bg-[#141720] border border-white/[0.08] text-xs text-[#8E95A5] leading-relaxed">
-                    Sobald ein Kunde bestellt oder du den Druck-Status einer Bestellung änderst,
-                    erscheint die automatisch erstellte Bestätigungs- oder Update-E-Mail hier (und
-                    wird mit SMTP-Daten in <code className="text-white">.env</code> live versendet).
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {emailLog.map((m) => (
-                      <div
-                        key={m.id}
-                        className="p-3.5 rounded-xl bg-[#141720] border border-white/[0.08] space-y-2"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="text-xs font-semibold text-white truncate">
-                              {m.subject}
-                            </div>
-                            <div className="font-mono text-[10px] text-[#8E95A5]">
-                              An: {m.to} • {new Date(m.createdAt).toLocaleTimeString('de-DE')}
-                            </div>
-                          </div>
-                          <button
-                            onClick={() =>
-                              setExpandedMailId(expandedMailId === m.id ? null : m.id)
-                            }
-                            className="text-[11px] font-mono text-[#38BDF8] shrink-0 cursor-pointer"
-                          >
-                            {expandedMailId === m.id ? 'Weniger' : 'Lesen'}
-                          </button>
-                        </div>
-                        {expandedMailId === m.id && (
-                          <pre className="p-3 rounded-lg bg-[#0A0C10] border border-white/[0.06] text-[11px] text-[#C4CAD6] whitespace-pre-wrap font-sans leading-relaxed">
-                            {m.text}
-                          </pre>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           )}
 
-          {/* TAB 5: STUDIO, LIVE PRINTER, LEGAL & SECURITY */}
+          {/* TAB 5: STUDIO, LIVE PRINTER & PIN */}
           {tab === 'settings' && studioDraft && (
             <div className="grid lg:grid-cols-12 gap-6">
-              {/* Left: Live Printer, Brand & Legal Editor */}
-              <form
-                onSubmit={handleSaveStudio}
-                className="lg:col-span-7 space-y-5"
-              >
+              {/* Left: Branding & Live Printer Widget */}
+              <form onSubmit={handleSaveStudio} className="lg:col-span-7 space-y-5">
                 <div className="p-5 rounded-2xl bg-[#141720] border border-white/[0.09] space-y-4">
                   <div className="flex items-center gap-2 pb-2 border-b border-white/[0.07]">
                     <Cpu className="w-4 h-4 text-[#38BDF8]" />
@@ -1456,7 +1401,7 @@ export default function CreatorStudioModal({
                   <div className="grid sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-mono text-[#9DA4B4] mb-1">
-                        Dein Studio / Shop-Name
+                        Dein Name / Studio-Name
                       </label>
                       <input
                         value={studioDraft.brandName || ''}
@@ -1468,7 +1413,7 @@ export default function CreatorStudioModal({
                     </div>
                     <div>
                       <label className="block text-xs font-mono text-[#9DA4B4] mb-1">
-                        Tagline
+                        Untertitel
                       </label>
                       <input
                         value={studioDraft.tagline || ''}
@@ -1480,20 +1425,7 @@ export default function CreatorStudioModal({
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-mono text-[#9DA4B4] mb-1">
-                      Top-Banner Text
-                    </label>
-                    <input
-                      value={studioDraft.announcement || ''}
-                      onChange={(e) =>
-                        setStudioDraft({ ...studioDraft, announcement: e.target.value })
-                      }
-                      className="w-full px-3 py-2 rounded-xl bg-[#0B0D12] border border-white/[0.1] text-xs text-white"
-                    />
-                  </div>
-
-                  <label className="flex items-center gap-2.5 text-xs text-white cursor-pointer">
+                  <label className="flex items-center gap-2.5 text-xs text-white cursor-pointer pt-1">
                     <input
                       type="checkbox"
                       checked={Boolean(studioDraft.printerStatus?.active)}
@@ -1508,7 +1440,7 @@ export default function CreatorStudioModal({
                       }
                       className="accent-[#FF5500] w-4 h-4"
                     />
-                    <span>&ldquo;Gerade auf dem Druckbett&rdquo; Widget im Hero anzeigen</span>
+                    <span>&ldquo;Gerade auf dem Druckbett&rdquo; Widget auf der Startseite zeigen</span>
                   </label>
 
                   <div className="grid sm:grid-cols-2 gap-3">
@@ -1545,6 +1477,7 @@ export default function CreatorStudioModal({
                             },
                           })
                         }
+                        placeholder="z.B. Kopfhörer-Ständer für Lukas"
                         className="w-full px-3 py-2 rounded-lg bg-[#0B0D12] border border-white/[0.1] text-xs text-white"
                       />
                     </div>
@@ -1582,7 +1515,7 @@ export default function CreatorStudioModal({
                       </label>
                       <input
                         type="number"
-                        value={studioDraft.printerStatus?.nozzleTemp || 215}
+                        value={studioDraft.printerStatus?.nozzleTemp || 210}
                         onChange={(e) =>
                           setStudioDraft({
                             ...studioDraft,
@@ -1629,60 +1562,10 @@ export default function CreatorStudioModal({
                             },
                           })
                         }
+                        placeholder="z.B. 1h 20m"
                         className="w-full px-2.5 py-1.5 rounded-lg bg-[#0B0D12] border border-white/[0.1] font-mono text-xs text-white"
                       />
                     </div>
-                  </div>
-                </div>
-
-                {/* Legal Info Editor (Impressum / AGB / Datenschutz) */}
-                <div className="p-5 rounded-2xl bg-[#141720] border border-white/[0.09] space-y-3">
-                  <div className="flex items-center gap-2 pb-2 border-b border-white/[0.07]">
-                    <Scale className="w-4 h-4 text-[#FF5500]" />
-                    <h3 className="font-display font-bold text-white">
-                      Impressum & Shop-Betreiberdaten
-                    </h3>
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    {[
-                      ['ownerName', 'Name / Studio-Inhaber'],
-                      ['email', 'Kontakt-E-Mail'],
-                      ['street', 'Straße & Nr.'],
-                      ['postalCity', 'PLZ & Stadt'],
-                      ['phone', 'Telefon (optional)'],
-                      ['shippingTime', 'Standard-Lieferzeit'],
-                    ].map(([key, label]) => (
-                      <div key={key}>
-                        <label className="block text-[11px] font-mono text-[#7D8596] mb-1">
-                          {label}
-                        </label>
-                        <input
-                          value={studioDraft.legal?.[key] || ''}
-                          onChange={(e) =>
-                            setStudioDraft({
-                              ...studioDraft,
-                              legal: { ...studioDraft.legal, [key]: e.target.value },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-lg bg-[#0B0D12] border border-white/[0.1] text-xs text-white"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-mono text-[#7D8596] mb-1">
-                      Steuerhinweis / USt-IdNr.
-                    </label>
-                    <input
-                      value={studioDraft.legal?.taxNotice || ''}
-                      onChange={(e) =>
-                        setStudioDraft({
-                          ...studioDraft,
-                          legal: { ...studioDraft.legal, taxNotice: e.target.value },
-                        })
-                      }
-                      className="w-full px-3 py-2 rounded-lg bg-[#0B0D12] border border-white/[0.1] text-xs text-white"
-                    />
                   </div>
                 </div>
 
@@ -1691,11 +1574,11 @@ export default function CreatorStudioModal({
                   disabled={savingStudio}
                   className="w-full py-3 px-5 rounded-xl bg-[#FF5500] hover:bg-[#FF6B1F] text-white font-semibold text-sm cursor-pointer"
                 >
-                  {savingStudio ? 'Speichert...' : 'Alle Studio- & Rechtsdaten speichern'}
+                  {savingStudio ? 'Speichert...' : 'Einstellungen speichern'}
                 </button>
               </form>
 
-              {/* Right: Security (Change PIN) & Integrations Status */}
+              {/* Right: Security (Change PIN) & Cloud Status */}
               <div className="lg:col-span-5 space-y-5">
                 <form
                   onSubmit={handleChangePin}
@@ -1704,7 +1587,7 @@ export default function CreatorStudioModal({
                   <div className="flex items-center gap-2 pb-2 border-b border-white/[0.07]">
                     <KeyRound className="w-4 h-4 text-[#FF5500]" />
                     <h3 className="font-display font-bold text-white">
-                      Studio-PIN / Passwort ändern
+                      Studio-PIN ändern (lokal)
                     </h3>
                   </div>
 
@@ -1723,13 +1606,13 @@ export default function CreatorStudioModal({
                       required
                       value={pinForm.currentPin}
                       onChange={(e) => setPinForm({ ...pinForm, currentPin: e.target.value })}
-                      placeholder={isDefaultPin ? '2026' : '••••'}
+                      placeholder="••••••"
                       className="w-full px-3 py-2 rounded-lg bg-[#0B0D12] border border-white/[0.1] font-mono text-sm text-white"
                     />
                   </div>
                   <div>
                     <label className="block text-[11px] font-mono text-[#7D8596] mb-1">
-                      Neue PIN / Passwort (mind. 4 Zeichen)
+                      Neue PIN (mind. 4 Zeichen)
                     </label>
                     <input
                       type="password"
@@ -1737,7 +1620,7 @@ export default function CreatorStudioModal({
                       minLength={4}
                       value={pinForm.newPin}
                       onChange={(e) => setPinForm({ ...pinForm, newPin: e.target.value })}
-                      placeholder="Dein neues Passwort"
+                      placeholder="Neue PIN"
                       className="w-full px-3 py-2 rounded-lg bg-[#0B0D12] border border-white/[0.1] font-mono text-sm text-white"
                     />
                   </div>
@@ -1749,57 +1632,40 @@ export default function CreatorStudioModal({
                   </button>
                 </form>
 
-                {/* Integration Readiness Card */}
+                {/* Clean System Status Card */}
                 <div className="p-5 rounded-2xl bg-[#141720] border border-white/[0.09] space-y-3">
                   <div className="flex items-center gap-2 pb-2 border-b border-white/[0.07]">
                     <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <h3 className="font-display font-bold text-white">
-                      Live-Integrationen (.env)
-                    </h3>
+                    <h3 className="font-display font-bold text-white">System-Status</h3>
                   </div>
 
                   <div className="flex items-center justify-between text-xs p-3 rounded-xl bg-[#0B0D12]">
                     <div>
-                      <div className="font-semibold text-white">Stripe Online-Zahlungen</div>
+                      <div className="font-semibold text-white">Cloud-Speicher (Vercel Blob)</div>
                       <div className="text-[11px] text-[#7D8596]">
-                        Key: <code className="font-mono">STRIPE_SECRET_KEY</code>
+                        Fotos, Produkte & verschlüsselte Aufträge
                       </div>
                     </div>
                     <span
                       className={`px-2 py-1 rounded font-mono text-[10px] ${
-                        stripeConfigured
+                        blobConfigured
                           ? 'bg-emerald-500/15 text-emerald-400'
                           : 'bg-amber-500/15 text-amber-300'
                       }`}
                     >
-                      {stripeConfigured ? 'LIVE AKTIV' : 'DEMO-MODUS'}
+                      {blobConfigured ? 'DAUERHAFT AKTIV' : 'LOKAL'}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between text-xs p-3 rounded-xl bg-[#0B0D12]">
                     <div>
-                      <div className="font-semibold text-white">Auto-E-Mails (SMTP)</div>
-                      <div className="text-[11px] text-[#7D8596]">
-                        Keys: <code className="font-mono">SMTP_HOST / USER / PASS</code>
-                      </div>
+                      <div className="font-semibold text-white">Material-Profil</div>
+                      <div className="text-[11px] text-[#7D8596]">5 PLA-Farben aktiv</div>
                     </div>
-                    <span
-                      className={`px-2 py-1 rounded font-mono text-[10px] ${
-                        smtpConfigured
-                          ? 'bg-emerald-500/15 text-emerald-400'
-                          : 'bg-[#38BDF8]/15 text-[#38BDF8]'
-                      }`}
-                    >
-                      {smtpConfigured ? 'LIVE AKTIV' : 'VORSCHAU'}
+                    <span className="px-2 py-1 rounded font-mono text-[10px] bg-[#FF5500]/15 text-[#FF7326]">
+                      100% PLA
                     </span>
                   </div>
-
-                  <p className="text-[11px] text-[#8E95A5] leading-relaxed">
-                    Um Stripe & E-Mail live zu schalten, kopiere einfach{' '}
-                    <code className="font-mono text-white">.env.example</code> zu{' '}
-                    <code className="font-mono text-white">.env</code>, trage deine Keys ein und
-                    starte den Server neu.
-                  </p>
                 </div>
               </div>
             </div>

@@ -14,21 +14,43 @@ export function verifyPin(pin, salt, expectedHash) {
   return crypto.timingSafeEqual(computed, expected);
 }
 
+export function envPinDigest(pin) {
+  return crypto.createHash('sha256').update(`ano-env-pin:${String(pin)}`).digest('hex');
+}
+
+export function buildEnvPinAuth(envPin) {
+  const deterministicSalt = crypto
+    .createHash('sha256')
+    .update(`ano-env-salt:${process.env.AUTH_SECRET || 'ano'}:${envPin}`)
+    .digest('hex')
+    .slice(0, 32);
+  const { salt, hash } = hashPin(envPin, deterministicSalt);
+  return {
+    pinSalt: salt,
+    pinHash: hash,
+    isDefaultPin: false,
+    envPinDigest: envPinDigest(envPin),
+  };
+}
+
 export function getInitialStore() {
   const envPin = (process.env.ADMIN_PIN || '').trim();
-  const initialPin = envPin || '2026';
-  const { salt, hash } = hashPin(initialPin);
+  const auth = envPin
+    ? buildEnvPinAuth(envPin)
+    : (() => {
+        const { salt, hash } = hashPin('2026', 'ano-default-pin-salt-2026');
+        return {
+          pinSalt: salt,
+          pinHash: hash,
+          isDefaultPin: true,
+        };
+      })();
 
   return {
-    auth: {
-      pinSalt: salt,
-      pinHash: hash,
-      isDefaultPin: !envPin,
-    },
+    auth,
     studio: {
       brandName: 'Ano',
       tagline: '3D-DRUCK // 100% PLA',
-      announcement: '100% PLA 3D-Drucke • Such dir was aus oder schick mir einfach dein Wunsch-Modell',
       printerStatus: {
         active: false,
         modelName: '',
@@ -39,21 +61,10 @@ export function getInitialStore() {
         bedTemp: 60,
         remaining: '',
       },
-      legal: {
-        ownerName: 'Ano 3D-Druck',
-        street: '',
-        postalCity: '',
-        country: 'Deutschland',
-        email: '',
-        phone: '',
-        taxNotice: '',
-        shippingTime: '2–3 Tage',
-      },
     },
     products: [],
     orders: [],
     inquiries: [],
-    emailLog: [],
     studioPhotos: [],
   };
 }
