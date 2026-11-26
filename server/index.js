@@ -236,7 +236,20 @@ const storage = multer.diskStorage({
   },
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '.png').toLowerCase() || '.png';
-    const allowed = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif', '.stl', '.obj', '.3mf'];
+    const allowed = [
+      '.png',
+      '.jpg',
+      '.jpeg',
+      '.webp',
+      '.gif',
+      '.avif',
+      '.stl',
+      '.obj',
+      '.3mf',
+      '.gcode',
+      '.gco',
+      '.bgcode',
+    ];
     const safeExt = allowed.includes(ext) ? ext : '.bin';
     const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${safeExt}`;
     cb(null, unique);
@@ -249,13 +262,13 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
     const isImage = file.mimetype?.startsWith('image/');
-    const is3d = ['.stl', '.obj', '.3mf'].includes(ext);
+    const is3d = ['.stl', '.obj', '.3mf', '.gcode', '.gco', '.bgcode'].includes(ext);
     if (isImage || is3d) {
       cb(null, true);
     } else {
       cb(
         new Error(
-          'Nur Bilder (PNG, JPG, WEBP) oder 3D-Dateien (.STL, .OBJ, .3MF) sind erlaubt.'
+          'Nur Bilder (PNG, JPG, WEBP) oder 3D-/Slicer-Dateien (.STL, .3MF, .GCODE, .BGCODE) sind erlaubt.'
         )
       );
     }
@@ -591,6 +604,7 @@ app.post('/api/products', requireAdmin, productUploadFields, async (req, res) =>
       weight: req.body.weight || '110 g',
       infill: req.body.infill || '15%',
     },
+    slicerMeta: parseJsonField(req.body.slicerMeta, null),
     stockMode: req.body.stockMode === 'in-stock' ? 'in-stock' : 'made-to-order',
     stockCount: Math.max(0, parseInt(req.body.stockCount, 10) || 1),
     leadTime: (req.body.leadTime || '2–3 Tage').trim(),
@@ -652,6 +666,10 @@ app.put('/api/products/:id', requireAdmin, productUploadFields, async (req, res)
       weight: req.body.weight || existing.specs?.weight || '110 g',
       infill: req.body.infill || existing.specs?.infill || '15%',
     },
+    slicerMeta:
+      req.body.slicerMeta !== undefined
+        ? parseJsonField(req.body.slicerMeta, null)
+        : existing.slicerMeta || null,
     stockMode: req.body.stockMode || existing.stockMode,
     stockCount:
       req.body.stockCount !== undefined
@@ -717,6 +735,7 @@ app.get('/api/orders/:id', async (req, res) => {
     items: order.items,
     total: order.total,
     city: order.customer?.city || '',
+    slicerMeta: order.slicerMeta || null,
   });
 });
 
@@ -810,6 +829,9 @@ app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
   }
   if (req.body.progress !== undefined) {
     order.progress = Math.max(0, Math.min(100, Math.round(Number(req.body.progress) || 0)));
+  }
+  if (req.body.slicerMeta !== undefined) {
+    order.slicerMeta = req.body.slicerMeta || null;
   }
   await writeStore(store);
   res.json(order);

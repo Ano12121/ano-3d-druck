@@ -25,6 +25,7 @@ export default function CustomPrintSection({ onInquiryCreated }) {
   const [imagePreview, setImagePreview] = useState(null);
   const [stlFile, setStlFile] = useState(null);
   const [parsedStl, setParsedStl] = useState(null);
+  const [slicerParsed, setSlicerParsed] = useState(null);
   const [estimate, setEstimate] = useState(null);
   const [dragActive, setDragActive] = useState(false);
 
@@ -38,8 +39,9 @@ export default function CustomPrintSection({ onInquiryCreated }) {
   const handlePickedFile = async (picked) => {
     if (!picked) return;
     setError('');
+    const lower = picked.name.toLowerCase();
 
-    if (picked.name.toLowerCase().endsWith('.stl')) {
+    if (lower.endsWith('.stl')) {
       try {
         const [{ parseStlArrayBuffer, estimateStlPrint }, buf] = await Promise.all([
           import('../utils/stlPricing'),
@@ -55,6 +57,7 @@ export default function CustomPrintSection({ onInquiryCreated }) {
         });
         setStlFile(picked);
         setParsedStl(parsed);
+        setSlicerParsed(null);
         setEstimate(est);
         setImageFile(null);
         setImagePreview(null);
@@ -64,16 +67,46 @@ export default function CustomPrintSection({ onInquiryCreated }) {
       return;
     }
 
+    if (
+      lower.endsWith('.3mf') ||
+      lower.endsWith('.gcode') ||
+      lower.endsWith('.gco') ||
+      lower.endsWith('.bgcode')
+    ) {
+      try {
+        const { parseSlicerFile } = await import('../utils/slicerParser');
+        const parsed = await parseSlicerFile(picked);
+        setSlicerParsed(parsed);
+        setParsedStl(null);
+        // Only attach raw file upload when within safe serverless limit (<= 3.8 MB); metadata + preview always sent!
+        setStlFile(picked.size <= 3.8 * 1024 * 1024 ? picked : null);
+        setImageFile(parsed.thumbnailFile || null);
+        setImagePreview(parsed.thumbnailUrl || null);
+        setEstimate({
+          estimatedPrice: parsed.suggestedPrice || 9.9,
+          estimatedGrams: Math.round(parsed.weightGrams || 0),
+          printTimeLabel: parsed.printTimeLabel || 'laut Slicer',
+          dimensionsText: parsed.dimensions || parsed.slicerName || 'Slicer-Datei',
+          layerHeight: parsed.layerHeight || '',
+          slicerFileName: picked.name,
+        });
+      } catch (err) {
+        setError(err.message || 'Die Slicer-Datei konnte leider nicht gelesen werden.');
+      }
+      return;
+    }
+
     if (picked.type?.startsWith('image/')) {
       setImageFile(picked);
       setImagePreview(URL.createObjectURL(picked));
       setStlFile(null);
       setParsedStl(null);
+      setSlicerParsed(null);
       setEstimate(null);
       return;
     }
 
-    setError('Bitte ein Bild (JPG/PNG) oder eine .STL-Datei auswählen.');
+    setError('Bitte ein Bild (JPG/PNG), eine .STL- oder Slicer-Datei (.3MF / .GCODE) auswählen.');
   };
 
   const clearAttachment = () => {
@@ -81,6 +114,7 @@ export default function CustomPrintSection({ onInquiryCreated }) {
     setImagePreview(null);
     setStlFile(null);
     setParsedStl(null);
+    setSlicerParsed(null);
     setEstimate(null);
   };
 
@@ -214,13 +248,60 @@ export default function CustomPrintSection({ onInquiryCreated }) {
                 </div>
               </div>
 
-              {/* Single Dropzone for Image OR .STL */}
+              {/* Single Dropzone for Image OR .STL / Slicer File */}
               <div>
                 <label className="block text-xs font-mono text-[#9DA4B4] mb-1.5">
-                  Oder Bild / .STL-Datei reinziehen (optional)
+                  Oder Bild / .STL / Slicer-Datei (.3MF, .GCODE) reinziehen (optional)
                 </label>
 
-                {parsedStl ? (
+                {slicerParsed ? (
+                  <div className="p-3.5 rounded-xl bg-[#0C0E13] border border-[#38BDF8]/35 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="inline-flex items-center gap-1.5 font-mono text-[#38BDF8] truncate">
+                        <Box className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{slicerParsed.fileName}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={clearAttachment}
+                        className="text-[#8E95A5] hover:text-red-400 inline-flex items-center gap-1 cursor-pointer shrink-0"
+                      >
+                        <X className="w-3.5 h-3.5" /> Entfernen
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {imagePreview && (
+                        <img
+                          src={imagePreview}
+                          alt="Slicer Vorschau"
+                          className="w-16 h-16 rounded-lg object-cover border border-white/[0.1] shrink-0"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0 font-mono text-xs text-[#C4CAD6] space-y-1">
+                        <div className="text-[#7D8596] text-[10px] uppercase">
+                          Aus {slicerParsed.slicerName} erkannt
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-1">
+                          {slicerParsed.printTimeLabel && (
+                            <span>⏱ {slicerParsed.printTimeLabel}</span>
+                          )}
+                          {slicerParsed.weightGrams > 0 && (
+                            <span>⚖ {Math.round(slicerParsed.weightGrams)} g PLA</span>
+                          )}
+                          {slicerParsed.layerHeight && (
+                            <span>↕ {slicerParsed.layerHeight}</span>
+                          )}
+                          {slicerParsed.dimensions && <span>📐 {slicerParsed.dimensions}</span>}
+                        </div>
+                        {estimate?.estimatedPrice && (
+                          <div className="text-[#FF7326] font-bold">
+                            ca. {formatEUR(estimate.estimatedPrice)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : parsedStl ? (
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between text-xs">
                       <span className="inline-flex items-center gap-1.5 font-mono text-[#38BDF8]">
@@ -298,10 +379,10 @@ export default function CustomPrintSection({ onInquiryCreated }) {
                     }`}
                   >
                     <Upload className="w-4 h-4 text-[#FF5500]" />
-                    <span>Bild, Screenshot oder .STL-Datei auswählen</span>
+                    <span>Bild, .STL oder Slicer-Datei (.3MF / .GCODE) auswählen</span>
                     <input
                       type="file"
-                      accept="image/*,.stl"
+                      accept="image/*,.stl,.3mf,.gcode,.gco,.bgcode"
                       onChange={(e) => handlePickedFile(e.target.files?.[0])}
                       className="hidden"
                     />

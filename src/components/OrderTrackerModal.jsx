@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Search, CheckCircle2, Circle, PackageSearch, RefreshCw } from 'lucide-react';
+import {
+  X,
+  Search,
+  CheckCircle2,
+  Circle,
+  PackageSearch,
+  RefreshCw,
+  Clock,
+  Scale,
+  Layers,
+  Cpu,
+} from 'lucide-react';
 import { ORDER_STEPS, formatEUR } from '../data/filaments';
 import { lookupOrder } from '../api';
 
@@ -159,6 +170,58 @@ export default function OrderTrackerModal({ open, initialCode, onClose }) {
                       className="h-full rounded-full bg-gradient-to-r from-[#FF5500] via-[#FF7A26] to-[#38BDF8] transition-all duration-700"
                       style={{ width: `${progress}%` }}
                     />
+                  </div>
+                </div>
+              )}
+
+              {/* Exact Slicer Print Info (when attached by Creator) */}
+              {order.slicerMeta && (
+                <div className="p-3.5 rounded-xl bg-[#0C0E13] border border-[#38BDF8]/30 space-y-2">
+                  <div className="flex items-center justify-between gap-2 font-mono text-[10px] text-[#38BDF8] uppercase">
+                    <span>Druckdaten aus Slicer</span>
+                    {order.slicerMeta.slicerName && <span>{order.slicerMeta.slicerName}</span>}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                    {order.slicerMeta.printTimeLabel && (
+                      <div className="p-2 rounded-lg bg-[#141720]">
+                        <div className="text-[10px] text-[#7D8596] flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-[#38BDF8]" /> Druckdauer
+                        </div>
+                        <div className="text-white font-semibold mt-0.5">
+                          {order.slicerMeta.printTimeLabel}
+                        </div>
+                      </div>
+                    )}
+                    {order.slicerMeta.weightGrams > 0 && (
+                      <div className="p-2 rounded-lg bg-[#141720]">
+                        <div className="text-[10px] text-[#7D8596] flex items-center gap-1">
+                          <Scale className="w-3 h-3 text-[#FF5500]" /> Filament
+                        </div>
+                        <div className="text-white font-semibold mt-0.5">
+                          {Math.round(order.slicerMeta.weightGrams)} g PLA
+                        </div>
+                      </div>
+                    )}
+                    {order.slicerMeta.layerHeight && (
+                      <div className="p-2 rounded-lg bg-[#141720]">
+                        <div className="text-[10px] text-[#7D8596] flex items-center gap-1">
+                          <Layers className="w-3 h-3 text-[#FF5500]" /> Schicht
+                        </div>
+                        <div className="text-white font-semibold mt-0.5">
+                          {order.slicerMeta.layerHeight}
+                        </div>
+                      </div>
+                    )}
+                    {order.slicerMeta.printerModel && (
+                      <div className="p-2 rounded-lg bg-[#141720]">
+                        <div className="text-[10px] text-[#7D8596] flex items-center gap-1">
+                          <Cpu className="w-3 h-3 text-[#38BDF8]" /> Drucker
+                        </div>
+                        <div className="text-white font-semibold mt-0.5 truncate">
+                          {order.slicerMeta.printerModel}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

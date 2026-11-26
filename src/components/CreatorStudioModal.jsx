@@ -23,6 +23,11 @@ import {
   Camera,
   Share2,
   RefreshCw,
+  FileCode2,
+  Clock,
+  Scale,
+  Layers,
+  Thermometer,
 } from 'lucide-react';
 import PhotoStudioTab from './PhotoStudioTab';
 import {
@@ -97,6 +102,10 @@ export default function CreatorStudioModal({
   const [newFiles, setNewFiles] = useState([]);
   const [newPreviews, setNewPreviews] = useState([]);
   const [modelFile, setModelFile] = useState(null);
+  const [slicerMeta, setSlicerMeta] = useState(null);
+  const [slicerExtra, setSlicerExtra] = useState(null); // transient UI data (thumbnailFile, suggestedPrice)
+  const [slicerParsing, setSlicerParsing] = useState(false);
+  const [slicerDragOver, setSlicerDragOver] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -154,7 +163,130 @@ export default function CreatorStudioModal({
     setNewFiles([]);
     setNewPreviews([]);
     setModelFile(null);
+    setSlicerMeta(null);
+    setSlicerExtra(null);
     setError('');
+  };
+
+  const buildCleanSlicerMeta = (parsed) => ({
+    sourceType: parsed.sourceType,
+    slicerName: parsed.slicerName,
+    fileName: parsed.fileName,
+    printTimeSeconds: parsed.printTimeSeconds || 0,
+    printTimeLabel: parsed.printTimeLabel || '',
+    printTimeLong: parsed.printTimeLong || '',
+    weightGrams: parsed.weightGrams || 0,
+    filamentMeters: parsed.filamentMeters || 0,
+    layerHeight: parsed.layerHeight || '',
+    infill: parsed.infill || '',
+    dimensions: parsed.dimensions || '',
+    nozzleDiameter: parsed.nozzleDiameter || '',
+    nozzleTemp: parsed.nozzleTemp || null,
+    bedTemp: parsed.bedTemp || null,
+    printerModel: parsed.printerModel || '',
+    totalLayers: parsed.totalLayers || null,
+    supports: parsed.supports,
+    platesCount: parsed.platesCount || 1,
+  });
+
+  const handleImportProductSlicer = async (file) => {
+    if (!file) return;
+    setError('');
+    setSlicerParsing(true);
+    try {
+      const { parseSlicerFile } = await import('../utils/slicerParser');
+      const parsed = await parseSlicerFile(file);
+      const cleanMeta = buildCleanSlicerMeta(parsed);
+      setSlicerMeta(cleanMeta);
+      setSlicerExtra({
+        suggestedPrice: parsed.suggestedPrice,
+        thumbnailFile: parsed.thumbnailFile,
+        thumbnailUrl: parsed.thumbnailUrl,
+      });
+
+      setForm((prev) => ({
+        ...prev,
+        title: prev.title.trim() ? prev.title : parsed.suggestedTitle || prev.title,
+        printTime: parsed.printTimeLabel || prev.printTime,
+        weight: parsed.weightLabel || prev.weight,
+        layerHeight: parsed.layerHeight || prev.layerHeight,
+        infill: parsed.infill || prev.infill,
+        dimensions: parsed.dimensions || prev.dimensions,
+        price:
+          !editingId && prev.price === EMPTY_FORM.price && parsed.suggestedPrice
+            ? parsed.suggestedPrice.toFixed(2)
+            : prev.price,
+      }));
+
+      // Automatically attach extracted Slicer preview photo if no image is selected yet
+      if (parsed.thumbnailFile && existingImages.length === 0 && newFiles.length === 0) {
+        setNewFiles([parsed.thumbnailFile]);
+        setNewPreviews([parsed.thumbnailUrl]);
+      }
+
+      const bits = [
+        parsed.printTimeLabel && `⏱ ${parsed.printTimeLabel}`,
+        parsed.weightLabel && `⚖ ${parsed.weightLabel}`,
+        parsed.layerHeight && `↕ ${parsed.layerHeight}`,
+      ]
+        .filter(Boolean)
+        .join(' • ');
+      onShowToast(
+        bits
+          ? `Slicer-Daten übernommen (${bits})`
+          : `Slicer-Datei "${file.name}" eingelesen!`
+      );
+    } catch (err) {
+      setError(err.message || 'Slicer-Datei konnte nicht ausgelesen werden.');
+    } finally {
+      setSlicerParsing(false);
+    }
+  };
+
+  const handleAttachOrderSlicer = async (order, file) => {
+    if (!file) return;
+    try {
+      const { parseSlicerFile } = await import('../utils/slicerParser');
+      const parsed = await parseSlicerFile(file);
+      const cleanMeta = buildCleanSlicerMeta(parsed);
+      await handleOrderUpdate(
+        order.id,
+        {
+          slicerMeta: cleanMeta,
+          ...(order.status === 'neu' ? { status: 'slicing' } : {}),
+        },
+        `Slicer-Daten (${parsed.printTimeLabel || file.name}) an ${order.id} angehängt!`
+      );
+    } catch (err) {
+      onShowToast(err.message || 'Slicer-Datei konnte nicht gelesen werden.');
+    }
+  };
+
+  const handleFillLivePrinterFromSlicer = async (file) => {
+    if (!file) return;
+    try {
+      const { parseSlicerFile } = await import('../utils/slicerParser');
+      const parsed = await parseSlicerFile(file);
+      setStudioDraft((prev) => ({
+        ...prev,
+        printerStatus: {
+          ...prev?.printerStatus,
+          active: true,
+          modelName: parsed.suggestedTitle || prev?.printerStatus?.modelName || file.name,
+          printer: parsed.printerModel || prev?.printerStatus?.printer || 'Mein 3D-Drucker',
+          material: parsed.material ? `${parsed.material}` : 'PLA',
+          nozzleTemp: parsed.nozzleTemp || prev?.printerStatus?.nozzleTemp || 210,
+          bedTemp: parsed.bedTemp || prev?.printerStatus?.bedTemp || 60,
+          remaining: parsed.printTimeLabel || prev?.printerStatus?.remaining || '',
+          progress: 0,
+        },
+      }));
+      onShowToast(
+        `Slicer-Daten ins Live-Widget geladen (${parsed.printTimeLabel || file.name}) — noch auf "Speichern" klicken!`
+      );
+    } catch (err) {
+      onShowToast(err.message || 'Slicer-Datei konnte nicht gelesen werden.');
+    }
   };
 
   const startEdit = (product) => {
@@ -167,7 +299,7 @@ export default function CreatorStudioModal({
       compareAtPrice: product.compareAtPrice ? String(product.compareAtPrice) : '',
       category: product.category || 'Gaming & Desk',
       badge: product.badge || '',
-      material: product.material || 'PLA Matte',
+      material: product.material || 'PLA',
       colors: product.colors?.length
         ? product.colors
         : ['matt-schwarz', 'matt-weiss', 'rot-schwarz', 'galaxy-blau-lila', 'pink'],
@@ -187,14 +319,22 @@ export default function CreatorStudioModal({
     setNewFiles([]);
     setNewPreviews([]);
     setModelFile(null);
+    setSlicerMeta(product.slicerMeta || null);
+    setSlicerExtra(null);
     setError('');
     setTab('upload');
   };
 
   const addSelectedFiles = (fileList) => {
-    const incoming = Array.from(fileList || []).filter((f) =>
-      f.type.startsWith('image/')
+    const all = Array.from(fileList || []);
+    // If the user drops a slicer file onto the photo dropzone, import it seamlessly!
+    const droppedSlicer = all.find((f) =>
+      /\.(3mf|gcode|gco|bgcode)$/i.test(f.name || '')
     );
+    if (droppedSlicer) {
+      handleImportProductSlicer(droppedSlicer);
+    }
+    const incoming = all.filter((f) => f.type.startsWith('image/'));
     if (incoming.length === 0) return;
     const totalAllowed = Math.max(0, 6 - existingImages.length - newFiles.length);
     const sliced = incoming.slice(0, totalAllowed);
@@ -234,6 +374,7 @@ export default function CreatorStudioModal({
         }
       });
       fd.append('existingImages', JSON.stringify(existingImages));
+      fd.append('slicerMeta', slicerMeta ? JSON.stringify(slicerMeta) : 'null');
       if (removeModel) fd.append('removeModel', 'true');
       newFiles.forEach((file) => fd.append('images', file));
       if (modelFile) fd.append('modelFile', modelFile);
@@ -575,6 +716,204 @@ export default function CreatorStudioModal({
                   {error}
                 </div>
               )}
+
+              {/* SLICER FILE AUTO-IMPORT (.3MF / .GCODE.3MF / .GCODE / .BGCODE) */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setSlicerDragOver(true);
+                }}
+                onDragLeave={() => setSlicerDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setSlicerDragOver(false);
+                  const f = e.dataTransfer.files?.[0];
+                  if (f) handleImportProductSlicer(f);
+                }}
+                className={`rounded-2xl border-2 border-dashed p-5 transition-all space-y-4 ${
+                  slicerDragOver
+                    ? 'border-[#38BDF8] bg-[#38BDF8]/12'
+                    : slicerMeta
+                    ? 'border-[#38BDF8]/45 bg-gradient-to-br from-[#0F1724] to-[#12151D]'
+                    : 'border-[#38BDF8]/30 bg-gradient-to-br from-[#101622] to-[#12151D]'
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-[#38BDF8]/15 border border-[#38BDF8]/35 flex items-center justify-center shrink-0">
+                      <FileCode2 className="w-5 h-5 text-[#38BDF8]" />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-bold text-white">
+                          Fertige Slicer-Datei reinziehen
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-[#38BDF8]/15 font-mono text-[10px] text-[#38BDF8]">
+                          .3MF • .GCODE.3MF • .GCODE • .BGCODE
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#8E95A5] mt-0.5">
+                        Übernimmt automatisch Druckzeit, Gewicht, Schichthöhe, Infill, Maße &amp; Vorschau aus Bambu Studio, OrcaSlicer, PrusaSlicer &amp; Cura
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {slicerMeta && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSlicerMeta(null);
+                          setSlicerExtra(null);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-red-500/20 text-[#9DA4B4] hover:text-red-300 text-xs cursor-pointer"
+                      >
+                        Zurücksetzen
+                      </button>
+                    )}
+                    <label className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#38BDF8] hover:bg-[#56CAF9] text-[#090A0D] font-semibold text-xs cursor-pointer transition-colors">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{slicerParsing ? 'Liest aus...' : 'Slicer-Datei wählen'}</span>
+                      <input
+                        type="file"
+                        accept=".3mf,.gcode,.gco,.bgcode"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleImportProductSlicer(f);
+                          e.target.value = '';
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {slicerMeta && (
+                  <div className="rounded-xl bg-[#0A0D14] border border-[#38BDF8]/25 p-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2 font-mono text-[#38BDF8]">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span className="font-semibold text-white">
+                          {slicerMeta.slicerName || 'Slicer'}
+                        </span>
+                        <span className="text-[#7D8596] truncate max-w-[260px]">
+                          {slicerMeta.fileName}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {slicerExtra?.suggestedPrice && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm((prev) => ({
+                                ...prev,
+                                price: slicerExtra.suggestedPrice.toFixed(2),
+                              }));
+                              onShowToast(
+                                `Preisvorschlag ${formatEUR(slicerExtra.suggestedPrice)} übernommen.`
+                              );
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-[#FF5500]/15 hover:bg-[#FF5500]/30 border border-[#FF5500]/40 font-mono text-[11px] text-[#FF8547] cursor-pointer"
+                          >
+                            Preisvorschlag: {formatEUR(slicerExtra.suggestedPrice)} übernehmen
+                          </button>
+                        )}
+                        {slicerExtra?.thumbnailFile &&
+                          !newFiles.includes(slicerExtra.thumbnailFile) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (existingImages.length + newFiles.length >= 6) return;
+                                setNewFiles((prev) => [slicerExtra.thumbnailFile, ...prev]);
+                                setNewPreviews((prev) => [slicerExtra.thumbnailUrl, ...prev]);
+                                onShowToast('Slicer-Vorschau als Foto hinzugefügt!');
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 border border-[#38BDF8]/40 font-mono text-[11px] text-[#38BDF8] cursor-pointer"
+                            >
+                              + Slicer-Vorschau als Foto
+                            </button>
+                          )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs">
+                      {slicerMeta.printTimeLabel && (
+                        <div className="p-2.5 rounded-lg bg-[#121622] border border-white/[0.06]">
+                          <div className="text-[10px] text-[#7D8596] flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-[#38BDF8]" /> DRUCKZEIT
+                          </div>
+                          <div className="text-white font-bold mt-0.5">
+                            {slicerMeta.printTimeLong || slicerMeta.printTimeLabel}
+                          </div>
+                        </div>
+                      )}
+                      {slicerMeta.weightGrams > 0 && (
+                        <div className="p-2.5 rounded-lg bg-[#121622] border border-white/[0.06]">
+                          <div className="text-[10px] text-[#7D8596] flex items-center gap-1">
+                            <Scale className="w-3 h-3 text-[#FF5500]" /> FILAMENT
+                          </div>
+                          <div className="text-white font-bold mt-0.5">
+                            {Math.round(slicerMeta.weightGrams)} g PLA
+                            {slicerMeta.filamentMeters > 0
+                              ? ` (${slicerMeta.filamentMeters} m)`
+                              : ''}
+                          </div>
+                        </div>
+                      )}
+                      {slicerMeta.layerHeight && (
+                        <div className="p-2.5 rounded-lg bg-[#121622] border border-white/[0.06]">
+                          <div className="text-[10px] text-[#7D8596] flex items-center gap-1">
+                            <Layers className="w-3 h-3 text-[#FF5500]" /> SCHICHT / INFILL
+                          </div>
+                          <div className="text-white font-bold mt-0.5">
+                            {slicerMeta.layerHeight}
+                            {slicerMeta.infill ? ` • ${slicerMeta.infill}` : ''}
+                          </div>
+                        </div>
+                      )}
+                      {(slicerMeta.nozzleTemp || slicerMeta.printerModel || slicerMeta.nozzleDiameter) && (
+                        <div className="p-2.5 rounded-lg bg-[#121622] border border-white/[0.06]">
+                          <div className="text-[10px] text-[#7D8596] flex items-center gap-1">
+                            <Thermometer className="w-3 h-3 text-[#38BDF8]" /> DRUCKER / TEMP
+                          </div>
+                          <div className="text-white font-bold mt-0.5 truncate">
+                            {slicerMeta.nozzleTemp
+                              ? `${slicerMeta.nozzleTemp}°C / ${slicerMeta.bedTemp || 60}°C`
+                              : slicerMeta.printerModel || slicerMeta.nozzleDiameter}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 text-[11px] font-mono text-[#8E95A5]">
+                      {slicerMeta.dimensions && (
+                        <span className="px-2 py-0.5 rounded bg-white/[0.05]">
+                          Maße: {slicerMeta.dimensions}
+                        </span>
+                      )}
+                      {slicerMeta.nozzleDiameter && (
+                        <span className="px-2 py-0.5 rounded bg-white/[0.05]">
+                          Düse: {slicerMeta.nozzleDiameter}
+                        </span>
+                      )}
+                      {slicerMeta.totalLayers && (
+                        <span className="px-2 py-0.5 rounded bg-white/[0.05]">
+                          {slicerMeta.totalLayers} Layer
+                        </span>
+                      )}
+                      {slicerMeta.printerModel && (
+                        <span className="px-2 py-0.5 rounded bg-white/[0.05]">
+                          Drucker: {slicerMeta.printerModel}
+                        </span>
+                      )}
+                      {slicerMeta.supports !== null && slicerMeta.supports !== undefined && (
+                        <span className="px-2 py-0.5 rounded bg-white/[0.05]">
+                          Support: {slicerMeta.supports ? 'Ja' : 'Nein'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Photo Upload Dropzone */}
               <div
@@ -1177,7 +1516,23 @@ export default function CreatorStudioModal({
                           <div className="font-mono text-[11px] text-[#7D8596] uppercase">
                             Druck-Status & Live-Fortschritt:
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FF5500]/15 hover:bg-[#FF5500]/25 border border-[#FF5500]/35 text-[11px] font-mono text-[#FF8547] cursor-pointer">
+                              <FileCode2 className="w-3 h-3" />
+                              <span>
+                                {order.slicerMeta ? 'Slicer-Datei aktualisieren' : 'Slicer-Datei'}
+                              </span>
+                              <input
+                                type="file"
+                                accept=".3mf,.gcode,.gco,.bgcode"
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0];
+                                  if (f) handleAttachOrderSlicer(order, f);
+                                  e.target.value = '';
+                                }}
+                                className="hidden"
+                              />
+                            </label>
                             <button
                               type="button"
                               onClick={() => copyTrackingLink(order.id)}
@@ -1196,6 +1551,29 @@ export default function CreatorStudioModal({
                             </button>
                           </div>
                         </div>
+
+                        {order.slicerMeta && (
+                          <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl bg-[#0B1018] border border-[#38BDF8]/25 font-mono text-[11px] text-[#C4CAD6]">
+                            <FileCode2 className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" />
+                            <span className="text-[#38BDF8] font-semibold">
+                              {order.slicerMeta.slicerName || 'Slicer'}:
+                            </span>
+                            {order.slicerMeta.printTimeLabel && (
+                              <span>⏱ {order.slicerMeta.printTimeLabel}</span>
+                            )}
+                            {order.slicerMeta.weightGrams > 0 && (
+                              <span>• ⚖ {Math.round(order.slicerMeta.weightGrams)} g PLA</span>
+                            )}
+                            {order.slicerMeta.layerHeight && (
+                              <span>• ↕ {order.slicerMeta.layerHeight}</span>
+                            )}
+                            {order.slicerMeta.printerModel && (
+                              <span className="text-[#8E95A5]">
+                                • {order.slicerMeta.printerModel}
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         <div className="flex flex-wrap gap-1.5">
                           {ORDER_STEPS.map((st) => (
@@ -1391,11 +1769,27 @@ export default function CreatorStudioModal({
               {/* Left: Branding & Live Printer Widget */}
               <form onSubmit={handleSaveStudio} className="lg:col-span-7 space-y-5">
                 <div className="p-5 rounded-2xl bg-[#141720] border border-white/[0.09] space-y-4">
-                  <div className="flex items-center gap-2 pb-2 border-b border-white/[0.07]">
-                    <Cpu className="w-4 h-4 text-[#38BDF8]" />
-                    <h3 className="font-display font-bold text-white">
-                      Branding & Live-Drucker Widget
-                    </h3>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/[0.07]">
+                    <div className="flex items-center gap-2">
+                      <Cpu className="w-4 h-4 text-[#38BDF8]" />
+                      <h3 className="font-display font-bold text-white">
+                        Branding & Live-Drucker Widget
+                      </h3>
+                    </div>
+                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 border border-[#38BDF8]/35 text-[11px] font-mono text-[#38BDF8] cursor-pointer">
+                      <FileCode2 className="w-3.5 h-3.5" />
+                      <span>Aus Slicer-Datei füllen</span>
+                      <input
+                        type="file"
+                        accept=".3mf,.gcode,.gco,.bgcode"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleFillLivePrinterFromSlicer(f);
+                          e.target.value = '';
+                        }}
+                        className="hidden"
+                      />
+                    </label>
                   </div>
 
                   <div className="grid sm:grid-cols-2 gap-3">

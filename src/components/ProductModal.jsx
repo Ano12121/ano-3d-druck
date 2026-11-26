@@ -197,8 +197,15 @@ export default function ProductModal({
 
             {/* Technical Print-Bed Spec Sheet */}
             <div className="rounded-xl bg-[#0C0E13] border border-white/[0.08] p-4">
-              <div className="font-mono text-[11px] text-[#7D8596] uppercase tracking-wider mb-3">
-                Technische Druckdaten
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div className="font-mono text-[11px] text-[#7D8596] uppercase tracking-wider">
+                  Technische Druckdaten
+                </div>
+                {product.slicerMeta?.slicerName && (
+                  <span className="px-2 py-0.5 rounded bg-[#38BDF8]/15 border border-[#38BDF8]/30 font-mono text-[10px] text-[#38BDF8]">
+                    SLICER: {product.slicerMeta.slicerName}
+                  </span>
+                )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                 <div className="p-2.5 rounded-lg bg-[#141720] border border-white/[0.05]">
@@ -247,6 +254,30 @@ export default function ProductModal({
                   </div>
                 </div>
               </div>
+              {product.slicerMeta && (
+                <div className="flex flex-wrap gap-2 mt-3 pt-2.5 border-t border-white/[0.06] font-mono text-[10px] text-[#8E95A5]">
+                  {product.slicerMeta.nozzleDiameter && (
+                    <span className="px-2 py-0.5 rounded bg-white/[0.05]">
+                      Düse {product.slicerMeta.nozzleDiameter}
+                    </span>
+                  )}
+                  {product.slicerMeta.totalLayers && (
+                    <span className="px-2 py-0.5 rounded bg-white/[0.05]">
+                      {product.slicerMeta.totalLayers} Layer
+                    </span>
+                  )}
+                  {product.slicerMeta.filamentMeters > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-white/[0.05]">
+                      {product.slicerMeta.filamentMeters} m PLA
+                    </span>
+                  )}
+                  {product.slicerMeta.printerModel && (
+                    <span className="px-2 py-0.5 rounded bg-white/[0.05]">
+                      {product.slicerMeta.printerModel}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
