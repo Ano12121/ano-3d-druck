@@ -273,6 +273,12 @@ const isStripeConfigured = () => Boolean(process.env.STRIPE_SECRET_KEY);
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 function parseJsonField(val, fallback) {

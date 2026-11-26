@@ -24,6 +24,7 @@ import {
   Scale,
   Camera,
   Share2,
+  RefreshCw,
 } from 'lucide-react';
 import PhotoStudioTab from './PhotoStudioTab';
 import {
@@ -117,6 +118,13 @@ export default function CreatorStudioModal({
       setStudioDraft(JSON.parse(JSON.stringify(studio)));
     }
   }, [studio, open]);
+
+  // Always fetch fresh orders/inquiries when opening Creator Studio or switching to orders/inbox
+  useEffect(() => {
+    if (open && authenticated) {
+      onRefresh();
+    }
+  }, [open, authenticated, tab]);
 
   if (!open) return null;
 
@@ -469,6 +477,17 @@ export default function CreatorStudioModal({
                 );
               })}
             </div>
+
+            <button
+              onClick={() => {
+                onRefresh();
+                onShowToast('Aufträge & Daten aktualisiert!');
+              }}
+              title="Jetzt aktualisieren"
+              className="p-2 rounded-lg text-[#8E95A5] hover:text-[#38BDF8] hover:bg-white/[0.08] cursor-pointer"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
 
             <button
               onClick={handleLogout}

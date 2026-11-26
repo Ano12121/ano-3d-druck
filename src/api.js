@@ -30,15 +30,17 @@ async function handleResponse(res) {
 }
 
 export async function fetchBootstrap() {
-  const res = await fetch(`${API_BASE}/bootstrap`, {
+  const res = await fetch(`${API_BASE}/bootstrap?_t=${Date.now()}`, {
     headers: authHeaders(),
+    cache: 'no-store',
   });
   return handleResponse(res);
 }
 
 export async function fetchAdminDashboard() {
-  const res = await fetch(`${API_BASE}/admin/dashboard`, {
+  const res = await fetch(`${API_BASE}/admin/dashboard?_t=${Date.now()}`, {
     headers: authHeaders(),
+    cache: 'no-store',
   });
   return handleResponse(res);
 }
@@ -121,7 +123,9 @@ export async function verifyStripeOrder(orderId, sessionId) {
 }
 
 export async function lookupOrder(orderId) {
-  const res = await fetch(`${API_BASE}/orders/${encodeURIComponent(orderId)}`);
+  const res = await fetch(`${API_BASE}/orders/${encodeURIComponent(orderId)}?_t=${Date.now()}`, {
+    cache: 'no-store',
+  });
   return handleResponse(res);
 }
 

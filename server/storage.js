@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { put, list } from '@vercel/blob';
+import { put, list, del } from '@vercel/blob';
 
 export const IS_VERCEL = Boolean(process.env.VERCEL);
 
@@ -53,17 +53,25 @@ function decryptVault(rawText) {
   }
 }
 
-const PUBLIC_BLOB_PATH = 'ano/store/public.json';
-const VAULT_BLOB_PATH = 'ano/store/vault.enc';
+const STORE_PREFIX = 'ano/store/';
 
-let cachedBlobUrls = { publicUrl: null, vaultUrl: null };
+function pickNewestBlob(blobs, startsWith) {
+  const matching = blobs
+    .filter((b) => b.pathname.startsWith(startsWith))
+    .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+  return matching[0] || null;
+}
 
+/**
+ * Reads the latest versioned public catalog + encrypted private vault from Vercel Blob.
+ * Using unique versioned filenames guarantees 0ms CDN staleness (immediate read-after-write).
+ */
 export async function loadCloudStore(fallbackStore) {
   if (!isBlobConfigured()) return null;
   try {
-    const { blobs } = await list({ prefix: 'ano/store/' });
-    const pubBlob = blobs.find((b) => b.pathname === PUBLIC_BLOB_PATH);
-    const vaultBlob = blobs.find((b) => b.pathname === VAULT_BLOB_PATH);
+    const { blobs } = await list({ prefix: STORE_PREFIX });
+    const pubBlob = pickNewestBlob(blobs, `${STORE_PREFIX}public`);
+    const vaultBlob = pickNewestBlob(blobs, `${STORE_PREFIX}vault`);
 
     if (!pubBlob && !vaultBlob) {
       return null;
@@ -71,31 +79,36 @@ export async function loadCloudStore(fallbackStore) {
 
     const merged = { ...fallbackStore };
 
+    const tasks = [];
     if (pubBlob) {
-      cachedBlobUrls.publicUrl = pubBlob.url;
-      const res = await fetch(`${pubBlob.url}?t=${Date.now()}`, { cache: 'no-store' });
-      if (res.ok) {
-        const pubData = await res.json();
-        if (pubData.studio) merged.studio = { ...merged.studio, ...pubData.studio };
-        if (Array.isArray(pubData.products)) merged.products = pubData.products;
-      }
+      tasks.push(
+        fetch(pubBlob.url, { cache: 'no-store' })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((pubData) => {
+            if (!pubData) return;
+            if (pubData.studio) merged.studio = { ...merged.studio, ...pubData.studio };
+            if (Array.isArray(pubData.products)) merged.products = pubData.products;
+          })
+      );
     }
 
     if (vaultBlob) {
-      cachedBlobUrls.vaultUrl = vaultBlob.url;
-      const res = await fetch(`${vaultBlob.url}?t=${Date.now()}`, { cache: 'no-store' });
-      if (res.ok) {
-        const raw = await res.text();
-        const privData = decryptVault(raw);
-        if (privData) {
-          if (Array.isArray(privData.orders)) merged.orders = privData.orders;
-          if (Array.isArray(privData.inquiries)) merged.inquiries = privData.inquiries;
-          if (Array.isArray(privData.emailLog)) merged.emailLog = privData.emailLog;
-          if (Array.isArray(privData.studioPhotos)) merged.studioPhotos = privData.studioPhotos;
-        }
-      }
+      tasks.push(
+        fetch(vaultBlob.url, { cache: 'no-store' })
+          .then((r) => (r.ok ? r.text() : null))
+          .then((raw) => {
+            if (!raw) return;
+            const privData = decryptVault(raw);
+            if (!privData) return;
+            if (Array.isArray(privData.orders)) merged.orders = privData.orders;
+            if (Array.isArray(privData.inquiries)) merged.inquiries = privData.inquiries;
+            if (Array.isArray(privData.emailLog)) merged.emailLog = privData.emailLog;
+            if (Array.isArray(privData.studioPhotos)) merged.studioPhotos = privData.studioPhotos;
+          })
+      );
     }
 
+    await Promise.all(tasks);
     return merged;
   } catch (err) {
     console.error('Blob store read error:', err.message);
@@ -105,6 +118,8 @@ export async function loadCloudStore(fallbackStore) {
 
 export async function saveCloudStore(store) {
   if (!isBlobConfigured()) return;
+
+  const ts = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
   const publicPayload = JSON.stringify({
     studio: store.studio,
@@ -118,29 +133,34 @@ export async function saveCloudStore(store) {
     studioPhotos: store.studioPhotos || [],
   });
 
-  const [pubRes, vaultRes] = await Promise.all([
-    put(PUBLIC_BLOB_PATH, publicPayload, {
+  // List existing snapshots before writing so we can clean up old ones cleanly
+  const existing = await list({ prefix: STORE_PREFIX }).catch(() => ({ blobs: [] }));
+
+  await Promise.all([
+    put(`${STORE_PREFIX}public-${ts}.json`, publicPayload, {
       access: 'public',
       addRandomSuffix: false,
-      allowOverwrite: true,
+      cacheControlMaxAge: 60,
       contentType: 'application/json',
     }),
-    put(VAULT_BLOB_PATH, vaultPayload, {
+    put(`${STORE_PREFIX}vault-${ts}.enc`, vaultPayload, {
       access: 'public',
       addRandomSuffix: false,
-      allowOverwrite: true,
+      cacheControlMaxAge: 60,
       contentType: 'text/plain',
     }),
   ]);
 
-  cachedBlobUrls.publicUrl = pubRes.url;
-  cachedBlobUrls.vaultUrl = vaultRes.url;
+  // Clean up superseded older snapshots (keep store tidy & small)
+  const oldUrls = (existing.blobs || []).map((b) => b.url);
+  if (oldUrls.length > 0) {
+    del(oldUrls).catch(() => {});
+  }
 }
 
 /**
  * Persists an uploaded file (image or 3D model) cleanly across both local disk
- * and Vercel Serverless (using Vercel Blob when configured, or inline data URI
- * fallback for images on ephemeral Vercel instances).
+ * and Vercel Serverless (using Vercel Blob when configured).
  */
 export async function persistUploadedFile(file, subfolder = '') {
   if (!file) return null;
@@ -167,7 +187,13 @@ export async function persistUploadedFile(file, subfolder = '') {
   return `/uploads/${cleanSub}${file.filename}`;
 }
 
-export async function persistGeneratedBuffer({ buffer, filename, mimeType, subfolder = 'studio', localDir }) {
+export async function persistGeneratedBuffer({
+  buffer,
+  filename,
+  mimeType,
+  subfolder = 'studio',
+  localDir,
+}) {
   const cleanSub = subfolder ? `${subfolder.replace(/^\/+|\/+$/g, '')}/` : '';
 
   if (isBlobConfigured()) {
