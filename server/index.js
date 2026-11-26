@@ -341,6 +341,7 @@ app.get('/api/bootstrap', (req, res) => {
     stripeConfigured: isStripeConfigured(),
     smtpConfigured: isSmtpConfigured(),
     geminiConfigured: Boolean(getGeminiApiKey() || isAiGatewayAvailable()),
+    directGeminiConfigured: Boolean(getGeminiApiKey()),
     lanUrls: authed ? getLanUrls(5173) : [],
     orders: authed ? store.orders : [],
     inquiries: authed ? store.inquiries : [],
@@ -363,6 +364,7 @@ app.get('/api/admin/dashboard', requireAdmin, (_req, res) => {
     stripeConfigured: isStripeConfigured(),
     smtpConfigured: isSmtpConfigured(),
     geminiConfigured: Boolean(getGeminiApiKey() || isAiGatewayAvailable()),
+    directGeminiConfigured: Boolean(getGeminiApiKey()),
     lanUrls: getLanUrls(5173),
   });
 });

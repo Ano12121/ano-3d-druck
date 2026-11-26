@@ -56,6 +56,7 @@ const STYLE_PRESETS = [
 
 export default function PhotoStudioTab({
   geminiConfigured,
+  directGeminiConfigured,
   lanUrls,
   studioPhotos,
   onRefresh,
@@ -254,10 +255,10 @@ export default function PhotoStudioTab({
             <KeyRound
               className={`w-4 h-4 ${geminiConfigured ? 'text-emerald-400' : 'text-[#FF7326]'}`}
             />
-            {hasBrowserKey ? (
+            {hasBrowserKey || directGeminiConfigured ? (
               <span className="text-[#D0D5DF]">
                 <strong className="text-emerald-400">Dein Google AI Studio Key ist aktiv!</strong>{' '}
-                Fotos werden direkt über deinen Gemini-Account generiert.
+                Fotos werden auf allen Geräten direkt über deinen Gemini-Account generiert.
               </span>
             ) : geminiConfigured ? (
               <span className="text-[#D0D5DF]">
@@ -304,7 +305,7 @@ export default function PhotoStudioTab({
               onClick={() => setShowKeyBox((s) => !s)}
               className="px-3 py-1.5 rounded-lg bg-[#FF5500]/20 hover:bg-[#FF5500]/35 border border-[#FF5500]/50 text-xs font-mono text-white cursor-pointer"
             >
-              {hasBrowserKey ? 'Google Key ändern' : '+ Google Key eintragen'}
+              {hasBrowserKey || directGeminiConfigured ? 'Google Key ändern' : '+ Google Key eintragen'}
             </button>
           </div>
         </div>

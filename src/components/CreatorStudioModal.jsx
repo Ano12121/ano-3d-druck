@@ -72,6 +72,7 @@ export default function CreatorStudioModal({
   stripeConfigured,
   smtpConfigured,
   geminiConfigured,
+  directGeminiConfigured,
   lanUrls,
   studio,
   products,
@@ -474,6 +475,7 @@ export default function CreatorStudioModal({
           {tab === 'photo-studio' && (
             <PhotoStudioTab
               geminiConfigured={geminiConfigured}
+              directGeminiConfigured={directGeminiConfigured}
               lanUrls={lanUrls}
               studioPhotos={studioPhotos || []}
               onRefresh={onRefresh}

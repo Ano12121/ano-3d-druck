@@ -40,6 +40,7 @@ export default function App() {
   const [stripeConfigured, setStripeConfigured] = useState(false);
   const [smtpConfigured, setSmtpConfigured] = useState(false);
   const [geminiConfigured, setGeminiConfigured] = useState(false);
+  const [directGeminiConfigured, setDirectGeminiConfigured] = useState(false);
   const [lanUrls, setLanUrls] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -89,6 +90,7 @@ export default function App() {
       setStripeConfigured(Boolean(data.stripeConfigured));
       setSmtpConfigured(Boolean(data.smtpConfigured));
       setGeminiConfigured(Boolean(data.geminiConfigured));
+      setDirectGeminiConfigured(Boolean(data.directGeminiConfigured));
       setLanUrls(data.lanUrls || []);
       setOrders(data.orders || []);
       setInquiries(data.inquiries || []);
@@ -113,6 +115,7 @@ export default function App() {
         setEmailLog(dash.emailLog || []);
         setStudioPhotos(dash.studioPhotos || []);
         setGeminiConfigured(Boolean(dash.geminiConfigured));
+        setDirectGeminiConfigured(Boolean(dash.directGeminiConfigured));
         setLanUrls(dash.lanUrls || []);
         setIsDefaultPin(Boolean(dash.isDefaultPin));
       } catch {
@@ -566,6 +569,7 @@ export default function App() {
         stripeConfigured={stripeConfigured}
         smtpConfigured={smtpConfigured}
         geminiConfigured={geminiConfigured}
+        directGeminiConfigured={directGeminiConfigured}
         lanUrls={lanUrls}
         studio={studio}
         products={products}
