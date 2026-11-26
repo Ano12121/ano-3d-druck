@@ -792,7 +792,7 @@ async function parse3mfFile(file) {
 
   let thumbnailFile = null;
   let thumbnailUrl = null;
-  if (thumbEntry && thumbEntry.data.length > 200) {
+  if (thumbEntry && thumbEntry.data.length > 64) {
     const isJpg = /\.jpe?g$/i.test(thumbEntry.name);
     const mime = isJpg ? 'image/jpeg' : 'image/png';
     const ext = isJpg ? 'jpg' : 'png';
@@ -978,7 +978,7 @@ async function parseBgcodeFile(file) {
   const g = parseGcodeText(metaLines.join('\n'));
   let thumbnailFile = null;
   let thumbnailUrl = null;
-  if (bestThumb && bestThumb.bytes.length > 200) {
+  if (bestThumb && bestThumb.bytes.length > 64) {
     const ext = bestThumb.mime === 'image/jpeg' ? 'jpg' : 'png';
     thumbnailFile = new File([bestThumb.bytes], `bgcode-preview.${ext}`, {
       type: bestThumb.mime,
