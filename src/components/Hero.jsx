@@ -106,9 +106,9 @@ export default function Hero({ studio, featuredProducts, onSelectProduct, onOpen
             </div>
           </div>
 
-          {/* Right Interactive Spotlight & Live Printer Telemetry */}
+          {/* Right Interactive Spotlight OR Clean Empty Studio Card */}
           <div className="lg:col-span-6 space-y-4">
-            {activeProduct && (
+            {activeProduct ? (
               <div className="cad-card group rounded-2xl bg-[#111318] border border-white/[0.1] overflow-hidden shadow-2xl">
                 <div className="relative aspect-[4/3] overflow-hidden bg-[#0B0C10]">
                   <img
@@ -174,6 +174,40 @@ export default function Hero({ studio, featuredProducts, onSelectProduct, onOpen
                     </div>
                   </div>
                 )}
+              </div>
+            ) : (
+              <div className="cad-card rounded-2xl bg-[#111318]/90 border border-white/[0.1] p-8 sm:p-10 text-center space-y-5 buildplate-dots shadow-2xl">
+                <div className="w-16 h-16 rounded-2xl bg-[#FF5500]/15 border border-[#FF5500]/40 flex items-center justify-center mx-auto">
+                  <Layers className="w-8 h-8 text-[#FF5500]" />
+                </div>
+                <div className="space-y-2">
+                  <div className="font-mono text-[11px] uppercase tracking-widest text-[#FF7326]">
+                    DRUCKBETT BEREIT // 100% PLA
+                  </div>
+                  <h2 className="font-display text-2xl sm:text-3xl font-bold text-white">
+                    Bereit für die ersten 3D-Drucke
+                  </h2>
+                  <p className="text-sm text-[#9DA4B4] max-w-md mx-auto">
+                    Hier erscheinen automatisch deine eigenen Kreationen, sobald du dein erstes
+                    Foto im Creator Studio hochlädst.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                  <button
+                    onClick={onOpenStudio}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#FF5500] hover:bg-[#FF6B1F] text-white text-xs sm:text-sm font-semibold shadow-lg cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Erste Kreation hochladen</span>
+                  </button>
+                  <a
+                    href="#custom-print"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#181C26] hover:bg-[#222836] border border-white/[0.1] text-white text-xs sm:text-sm font-medium"
+                  >
+                    <Sparkles className="w-4 h-4 text-[#38BDF8]" />
+                    <span>Wunschdruck senden</span>
+                  </a>
+                </div>
               </div>
             )}
 

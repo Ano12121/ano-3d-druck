@@ -86,19 +86,9 @@ export default function OrderTrackerModal({ open, initialCode, onClose }) {
             </button>
           </form>
 
-          <div className="flex items-center gap-2 text-xs text-[#8E95A5]">
-            <span>Demo testen:</span>
-            <button
-              type="button"
-              onClick={() => {
-                setCode('ANO-2026-4819');
-                runLookup('ANO-2026-4819');
-              }}
-              className="px-2.5 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.12] font-mono text-[#38BDF8] cursor-pointer"
-            >
-              ANO-2026-4819
-            </button>
-          </div>
+          <p className="text-xs text-[#8E95A5]">
+            Gib einfach deinen Bestell-Code (z. B. <span className="font-mono text-white">ANO-2026-…</span>) ein, um den aktuellen Druckstatus zu sehen.
+          </p>
 
           {error && (
             <div className="p-3.5 rounded-xl bg-red-500/15 border border-red-500/35 text-red-300 text-xs">

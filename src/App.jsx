@@ -389,28 +389,41 @@ export default function App() {
           ) : filteredProducts.length === 0 ? (
             <div className="p-14 text-center rounded-2xl bg-[#111318] border border-white/[0.08] space-y-3">
               <p className="font-display text-xl font-semibold text-white">
-                Keine passende 3D-Kreation gefunden
+                {products.length === 0
+                  ? 'Hier kommen bald meine ersten 3D-Drucke rein'
+                  : 'Keine passende 3D-Kreation gefunden'}
               </p>
               <p className="text-sm text-[#8E95A5]">
-                Setze die Filter zurück oder lade deine eigene neue Kreation im Creator Studio hoch!
+                {products.length === 0
+                  ? 'Lad einfach im Creator Studio deine ersten eigenen Fotos hoch — oder schick unten einen 3D-Modell-Link.'
+                  : 'Setze die Filter zurück oder lade deine eigene neue Kreation im Creator Studio hoch!'}
               </p>
-              <div className="flex justify-center gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setActiveCategory('Alle');
-                    setActiveColorFilter(null);
-                    setSearchQuery('');
-                  }}
-                  className="px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white cursor-pointer"
-                >
-                  Filter zurücksetzen
-                </button>
+              <div className="flex flex-wrap justify-center gap-3 pt-2">
+                {products.length > 0 ? (
+                  <button
+                    onClick={() => {
+                      setActiveCategory('Alle');
+                      setActiveColorFilter(null);
+                      setSearchQuery('');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white cursor-pointer"
+                  >
+                    Filter zurücksetzen
+                  </button>
+                ) : (
+                  <a
+                    href="#custom-print"
+                    className="px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-medium text-white"
+                  >
+                    Eigenes Modell schicken
+                  </a>
+                )}
                 <button
                   onClick={() => setStudioOpen(true)}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FF5500] text-xs font-semibold text-white cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5" />
-                  <span>Neue Kreation hochladen</span>
+                  <span>Erste Kreation hochladen</span>
                 </button>
               </div>
             </div>

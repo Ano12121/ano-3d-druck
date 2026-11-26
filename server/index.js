@@ -24,6 +24,8 @@ import {
 import {
   IS_VERCEL,
   isBlobConfigured,
+  loadCloudStore,
+  saveCloudStore,
   persistUploadedFile,
 } from './storage.js';
 
@@ -65,15 +67,6 @@ function getGeminiApiKey() {
   return (secrets.geminiApiKey || process.env.GEMINI_API_KEY || '').trim();
 }
 
-const DEMO_MODEL_BY_ID = {
-  'prod-voronoi-lamp': 'voronoi-lamp',
-  'prod-headphone-stand': 'headphone-stand',
-  'prod-articulated-dragon': 'articulated-dragon',
-  'prod-desk-organizer': 'desk-organizer',
-  'prod-spiral-planter': 'spiral-planter',
-  'prod-controller-dock': 'controller-dock',
-};
-
 const VALID_FILAMENT_IDS = new Set([
   'matt-schwarz',
   'matt-weiss',
@@ -90,78 +83,55 @@ const DEFAULT_USER_COLORS = [
   'pink',
 ];
 
-function migrateStore(store) {
+function normalizeStore(store) {
   const defaults = getInitialStore();
-  let changed = false;
 
   if (!store.auth?.pinHash) {
     store.auth = defaults.auth;
-    changed = true;
   }
   const envPin = (process.env.ADMIN_PIN || '').trim();
-  if (envPin && !verifyPin(envPin, store.auth.pinSalt, store.auth.pinHash) && (IS_VERCEL || store.auth.isDefaultPin)) {
+  if (
+    envPin &&
+    !verifyPin(envPin, store.auth.pinSalt, store.auth.pinHash) &&
+    (IS_VERCEL || store.auth.isDefaultPin)
+  ) {
     const { salt, hash } = hashPin(envPin);
     store.auth = { pinSalt: salt, pinHash: hash, isDefaultPin: false };
-    changed = true;
   }
-  if (!store.studio?.legal) {
-    store.studio = { ...defaults.studio, ...store.studio, legal: defaults.studio.legal };
-    changed = true;
+  if (!store.studio) {
+    store.studio = defaults.studio;
   }
-  if (store.studio?.brandName === 'LAYERLAB') {
-    store.studio.brandName = 'Ano';
-    store.studio.tagline = '3D-DRUCK // 100% PLA';
-    changed = true;
+  if (!store.studio.legal) {
+    store.studio.legal = defaults.studio.legal;
   }
-  if (store.studio?.printerStatus?.material === 'PLA Matte Obsidian') {
-    store.studio.printerStatus.material = 'Matt-Schwarz (PLA Matte)';
-    changed = true;
-  }
-  if (!Array.isArray(store.emailLog)) {
-    store.emailLog = [];
-    changed = true;
-  }
-  if (!Array.isArray(store.studioPhotos)) {
-    store.studioPhotos = [];
-    changed = true;
-  }
-  if (Array.isArray(store.products)) {
-    store.products = store.products.map((p) => {
-      let next = p;
-      if (next.demoModel === undefined && DEMO_MODEL_BY_ID[next.id]) {
-        changed = true;
-        next = { ...next, modelUrl: next.modelUrl || null, demoModel: DEMO_MODEL_BY_ID[next.id] };
-      }
-      if (next.material !== 'PLA') {
-        changed = true;
-        next = { ...next, material: 'PLA' };
-      }
-      const hasLegacyColors =
-        !Array.isArray(next.colors) ||
-        next.colors.length === 0 ||
-        next.colors.some((c) => !VALID_FILAMENT_IDS.has(c));
-      if (hasLegacyColors) {
-        changed = true;
-        next = { ...next, colors: [...DEFAULT_USER_COLORS] };
-      }
-      return next;
-    });
-  }
-  if (changed) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(store, null, 2), 'utf-8');
-  }
+  if (!Array.isArray(store.products)) store.products = [];
+  if (!Array.isArray(store.orders)) store.orders = [];
+  if (!Array.isArray(store.inquiries)) store.inquiries = [];
+  if (!Array.isArray(store.emailLog)) store.emailLog = [];
+  if (!Array.isArray(store.studioPhotos)) store.studioPhotos = [];
+
+  store.products = store.products.map((p) => ({
+    ...p,
+    material: 'PLA',
+    colors:
+      Array.isArray(p.colors) &&
+      p.colors.length > 0 &&
+      p.colors.every((c) => VALID_FILAMENT_IDS.has(c))
+        ? p.colors
+        : [...DEFAULT_USER_COLORS],
+  }));
+
   return store;
 }
 
-function readStore() {
+function readLocalStoreSync() {
   if (!fs.existsSync(DATA_FILE)) {
     const initial = getInitialStore();
     fs.writeFileSync(DATA_FILE, JSON.stringify(initial, null, 2), 'utf-8');
     return initial;
   }
   try {
-    const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
-    return migrateStore(parsed);
+    return normalizeStore(JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8')));
   } catch {
     const initial = getInitialStore();
     fs.writeFileSync(DATA_FILE, JSON.stringify(initial, null, 2), 'utf-8');
@@ -169,13 +139,32 @@ function readStore() {
   }
 }
 
-function writeStore(store) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(store, null, 2), 'utf-8');
+async function readStore() {
+  const base = getInitialStore();
+  if (isBlobConfigured()) {
+    const cloud = await loadCloudStore(base);
+    if (cloud) {
+      return normalizeStore(cloud);
+    }
+    return normalizeStore(base);
+  }
+  return readLocalStoreSync();
 }
 
-// Stateless HMAC-SHA256 Admin Tokens (works seamlessly on Vercel Serverless & locally!)
+async function writeStore(store) {
+  if (isBlobConfigured()) {
+    await saveCloudStore(store);
+  }
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(store, null, 2), 'utf-8');
+  } catch {
+    // ignore local write errors on serverless if Blob already saved
+  }
+}
+
+// Stateless HMAC-SHA256 Admin Tokens (works seamlessly across Vercel Serverless & locally!)
 function getSigningKey(store) {
-  return process.env.AUTH_SECRET || store.auth?.pinHash || 'layerlab-local-secret';
+  return process.env.AUTH_SECRET || store.auth?.pinHash || 'ano-local-secret';
 }
 
 function createSessionToken(store) {
@@ -198,13 +187,12 @@ function getBearerToken(req) {
   return null;
 }
 
-function isValidAdmin(req) {
+function isValidAdmin(req, store) {
   const token = getBearerToken(req);
   if (!token || !token.includes('.')) return false;
   const [payload, sig] = token.split('.');
   if (!payload || !sig) return false;
   try {
-    const store = readStore();
     const expectedSig = crypto
       .createHmac('sha256', getSigningKey(store))
       .update(payload)
@@ -219,20 +207,30 @@ function isValidAdmin(req) {
   }
 }
 
-function requireAdmin(req, res, next) {
-  if (!isValidAdmin(req)) {
-    return res
-      .status(401)
-      .json({ error: 'Creator Studio gesperrt. Bitte melde dich mit deiner PIN an.' });
+async function requireAdmin(req, res, next) {
+  try {
+    const store = await readStore();
+    if (!isValidAdmin(req, store)) {
+      return res
+        .status(401)
+        .json({ error: 'Creator Studio gesperrt. Bitte melde dich mit deiner PIN an.' });
+    }
+    req._store = store;
+    next();
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Auth-Fehler' });
   }
-  next();
 }
 
-// Multer Storage for both Images and 3D Models (.stl / .obj / .3mf)
+// Multer Storage for Images and 3D Models (.stl / .obj / .3mf)
 const storage = multer.diskStorage({
   destination: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
-    if (['.stl', '.obj', '.3mf'].includes(ext) || file.fieldname === 'modelFile' || file.fieldname === 'stlFile') {
+    if (
+      ['.stl', '.obj', '.3mf'].includes(ext) ||
+      file.fieldname === 'modelFile' ||
+      file.fieldname === 'stlFile'
+    ) {
       cb(null, MODELS_DIR);
     } else if (file.fieldname === 'rawPhoto' || file.fieldname === 'originalPhoto') {
       cb(null, RAW_DIR);
@@ -261,7 +259,11 @@ const upload = multer({
     if (isImage || is3d) {
       cb(null, true);
     } else {
-      cb(new Error('Nur Bilder (PNG, JPG, WEBP) oder 3D-Dateien (.STL, .OBJ, .3MF) sind erlaubt.'));
+      cb(
+        new Error(
+          'Nur Bilder (PNG, JPG, WEBP) oder 3D-Dateien (.STL, .OBJ, .3MF) sind erlaubt.'
+        )
+      );
     }
   },
 });
@@ -284,18 +286,19 @@ function parseJsonField(val, fallback) {
 }
 
 // ===================== AUTH ROUTES =====================
-app.get('/api/auth/status', (req, res) => {
-  const store = readStore();
+app.get('/api/auth/status', async (req, res) => {
+  const store = await readStore();
   res.json({
-    authenticated: isValidAdmin(req),
+    authenticated: isValidAdmin(req, store),
     isDefaultPin: Boolean(store.auth?.isDefaultPin),
     stripeConfigured: isStripeConfigured(),
     smtpConfigured: isSmtpConfigured(),
+    blobConfigured: isBlobConfigured(),
   });
 });
 
-app.post('/api/auth/login', (req, res) => {
-  const store = readStore();
+app.post('/api/auth/login', async (req, res) => {
+  const store = await readStore();
   const pin = String(req.body?.pin || '').trim();
   if (!pin) {
     return res.status(400).json({ error: 'Bitte gib deine Studio-PIN / dein Passwort ein.' });
@@ -314,25 +317,27 @@ app.post('/api/auth/logout', (_req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/auth/change-pin', requireAdmin, (req, res) => {
-  const store = readStore();
+app.post('/api/auth/change-pin', requireAdmin, async (req, res) => {
+  const store = req._store;
   const { currentPin, newPin } = req.body || {};
   if (!newPin || String(newPin).trim().length < 4) {
-    return res.status(400).json({ error: 'Neue PIN/Passwort muss mindestens 4 Zeichen lang sein.' });
+    return res
+      .status(400)
+      .json({ error: 'Neue PIN/Passwort muss mindestens 4 Zeichen lang sein.' });
   }
   if (!verifyPin(String(currentPin || '').trim(), store.auth.pinSalt, store.auth.pinHash)) {
     return res.status(401).json({ error: 'Aktuelle PIN ist nicht korrekt.' });
   }
   const { salt, hash } = hashPin(String(newPin).trim());
   store.auth = { pinSalt: salt, pinHash: hash, isDefaultPin: false };
-  writeStore(store);
+  await writeStore(store);
   res.json({ ok: true, isDefaultPin: false });
 });
 
 // ===================== PUBLIC BOOTSTRAP =====================
-app.get('/api/bootstrap', (req, res) => {
-  const store = readStore();
-  const authed = isValidAdmin(req);
+app.get('/api/bootstrap', async (req, res) => {
+  const store = await readStore();
+  const authed = isValidAdmin(req, store);
   res.json({
     studio: store.studio,
     products: store.products,
@@ -340,6 +345,7 @@ app.get('/api/bootstrap', (req, res) => {
     isDefaultPin: Boolean(store.auth?.isDefaultPin),
     stripeConfigured: isStripeConfigured(),
     smtpConfigured: isSmtpConfigured(),
+    blobConfigured: isBlobConfigured(),
     geminiConfigured: Boolean(getGeminiApiKey() || isAiGatewayAvailable()),
     directGeminiConfigured: Boolean(getGeminiApiKey()),
     lanUrls: authed ? getLanUrls(5173) : [],
@@ -351,8 +357,8 @@ app.get('/api/bootstrap', (req, res) => {
 });
 
 // ===================== ADMIN DASHBOARD =====================
-app.get('/api/admin/dashboard', requireAdmin, (_req, res) => {
-  const store = readStore();
+app.get('/api/admin/dashboard', requireAdmin, async (req, res) => {
+  const store = req._store;
   res.json({
     studio: store.studio,
     products: store.products,
@@ -363,6 +369,7 @@ app.get('/api/admin/dashboard', requireAdmin, (_req, res) => {
     isDefaultPin: Boolean(store.auth?.isDefaultPin),
     stripeConfigured: isStripeConfigured(),
     smtpConfigured: isSmtpConfigured(),
+    blobConfigured: isBlobConfigured(),
     geminiConfigured: Boolean(getGeminiApiKey() || isAiGatewayAvailable()),
     directGeminiConfigured: Boolean(getGeminiApiKey()),
     lanUrls: getLanUrls(5173),
@@ -379,7 +386,10 @@ app.post('/api/studio/photo-key', requireAdmin, (req, res) => {
     delete secrets.geminiApiKey;
   }
   writeSecrets(secrets);
-  res.json({ geminiConfigured: Boolean(getGeminiApiKey() || isAiGatewayAvailable()) });
+  res.json({
+    geminiConfigured: Boolean(getGeminiApiKey() || isAiGatewayAvailable()),
+    directGeminiConfigured: Boolean(getGeminiApiKey()),
+  });
 });
 
 app.post(
@@ -388,14 +398,20 @@ app.post(
   upload.single('rawPhoto'),
   async (req, res) => {
     if (!req.file) {
-      return res.status(400).json({ error: 'Bitte lade zuerst ein Handyfoto deines 3D-Drucks hoch.' });
+      return res
+        .status(400)
+        .json({ error: 'Bitte lade zuerst ein Handyfoto deines 3D-Drucks hoch.' });
     }
 
-    const store = readStore();
+    const store = req._store;
     const style = req.body.style || 'obsidian-dark';
     const colorOverride = req.body.colorOverride || 'original';
     const customNote = (req.body.customNote || '').trim();
-    const title = (req.body.title || req.file.originalname.replace(/\.[^.]+$/, '') || '3D-Druck Foto').trim();
+    const title = (
+      req.body.title ||
+      req.file.originalname.replace(/\.[^.]+$/, '') ||
+      '3D-Druck Foto'
+    ).trim();
     const mode = req.body.mode || 'gemini';
     const originalUrl = await persistUploadedFile(req.file, 'raw');
 
@@ -414,7 +430,7 @@ app.post(
         createdAt: new Date().toISOString(),
       };
       store.studioPhotos = [entry, ...(store.studioPhotos || [])];
-      writeStore(store);
+      await writeStore(store);
       return res.status(201).json(entry);
     }
 
@@ -425,7 +441,7 @@ app.post(
     if (!directApiKey && !useGateway) {
       return res.status(400).json({
         error:
-          'Weder Vercel AI Gateway noch ein Gemini API-Key ist verbunden — nutze den Sofort-Studio-Look oder verbinde oben deinen Key.',
+          'Weder Vercel AI Gateway noch ein Gemini API-Key ist verbunden — nutze „Prompt kopieren & Gemini öffnen“ oder den „Sofort-Look (4:3)“.',
       });
     }
 
@@ -464,17 +480,17 @@ app.post(
       };
 
       store.studioPhotos = [entry, ...(store.studioPhotos || [])];
-      writeStore(store);
+      await writeStore(store);
       res.status(201).json(entry);
     } catch (err) {
       const msg = err.message || 'Unbekannter Fehler';
       const friendly =
         msg.includes('limit: 0') || msg.includes('exceeded your current quota')
-          ? 'Google blockiert Bild-Generierung im kostenlosen API-Tarif (limit: 0 — dein normales Gemini-Abo zählt dort leider nicht mit). Nutz einfach den Button „Prompt kopieren & in Gemini öffnen“ (0 € mit deinem Gemini-Abo) oder aktiviere API-Billing in aistudio.google.com.'
+          ? 'Google blockiert Bild-Generierung im kostenlosen API-Tarif (limit: 0 — dein normales Gemini-Abo zählt dort leider nicht mit). Nutz einfach den Button „Prompt kopieren & Gemini öffnen“ (0 € mit deinem Gemini-Abo) oder aktiviere API-Billing in aistudio.google.com.'
           : msg.includes('customer_verification_required') || msg.includes('credit card')
-          ? 'Vercel AI Gateway verlangt einmalig eine hinterlegte Karte für die kostenlosen Credits. Nutz einfach „Prompt kopieren & in Gemini öffnen“ oder den „Sofort-Studio-Look“!'
+          ? 'Vercel AI Gateway verlangt einmalig eine hinterlegte Karte für die kostenlosen Credits. Nutz einfach „Prompt kopieren & Gemini öffnen“ oder den „Sofort-Look (4:3)“!'
           : msg.includes('insufficient_funds') || msg.includes('402')
-          ? 'Credits aufgebraucht — nutz einfach „Prompt kopieren & in Gemini öffnen“ oder den „Sofort-Studio-Look“!'
+          ? 'Credits aufgebraucht — nutz einfach „Prompt kopieren & Gemini öffnen“ oder den „Sofort-Look (4:3)“!'
           : `KI-Bildgenerierung fehlgeschlagen: ${msg}`;
       res.status(502).json({ error: friendly });
     }
@@ -498,7 +514,7 @@ app.post(
     const studioUrl = await persistUploadedFile(styled, 'studio');
     const originalUrl = orig ? await persistUploadedFile(orig, 'raw') : studioUrl;
 
-    const store = readStore();
+    const store = req._store;
     const entry = {
       id: `PHOTO-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       title: (req.body.title || 'Studio-Foto').trim(),
@@ -514,21 +530,21 @@ app.post(
     };
 
     store.studioPhotos = [entry, ...(store.studioPhotos || [])];
-    writeStore(store);
+    await writeStore(store);
     res.status(201).json(entry);
   }
 );
 
-app.delete('/api/studio/photos/:id', requireAdmin, (req, res) => {
-  const store = readStore();
+app.delete('/api/studio/photos/:id', requireAdmin, async (req, res) => {
+  const store = req._store;
   store.studioPhotos = (store.studioPhotos || []).filter((p) => p.id !== req.params.id);
-  writeStore(store);
+  await writeStore(store);
   res.json({ deleted: req.params.id });
 });
 
 // ===================== PRODUCTS =====================
-app.get('/api/products', (_req, res) => {
-  const store = readStore();
+app.get('/api/products', async (_req, res) => {
+  const store = await readStore();
   res.json(store.products);
 });
 
@@ -538,12 +554,10 @@ const productUploadFields = upload.fields([
 ]);
 
 app.post('/api/products', requireAdmin, productUploadFields, async (req, res) => {
-  const store = readStore();
+  const store = req._store;
   const imgFiles = req.files?.images || [];
   const modelFiles = req.files?.modelFile || [];
-  const uploadedUrls = await Promise.all(
-    imgFiles.map((f) => persistUploadedFile(f, ''))
-  );
+  const uploadedUrls = await Promise.all(imgFiles.map((f) => persistUploadedFile(f, '')));
   const externalUrls = parseJsonField(req.body.existingImages, []);
   const images = [...uploadedUrls, ...externalUrls];
   const modelUrl = modelFiles[0]
@@ -554,7 +568,9 @@ app.post('/api/products', requireAdmin, productUploadFields, async (req, res) =>
     return res.status(400).json({ error: 'Bitte gib einen Namen für deine Kreation an.' });
   }
   if (images.length === 0) {
-    return res.status(400).json({ error: 'Bitte lade mindestens ein Foto deiner 3D-Kreation hoch.' });
+    return res
+      .status(400)
+      .json({ error: 'Bitte lade mindestens ein Foto deiner 3D-Kreation hoch.' });
   }
 
   const product = {
@@ -576,11 +592,11 @@ app.post('/api/products', requireAdmin, productUploadFields, async (req, res) =>
       printTime: req.body.printTime || '3h 30m',
       dimensions: req.body.dimensions || '120 × 120 × 100 mm',
       weight: req.body.weight || '110 g',
-      infill: req.body.infill || '15% Gyroid',
+      infill: req.body.infill || '15%',
     },
     stockMode: req.body.stockMode === 'in-stock' ? 'in-stock' : 'made-to-order',
     stockCount: Math.max(0, parseInt(req.body.stockCount, 10) || 1),
-    leadTime: (req.body.leadTime || '2–3 Werktage').trim(),
+    leadTime: (req.body.leadTime || '2–3 Tage').trim(),
     featured: req.body.featured === 'true' || req.body.featured === true,
     published: req.body.published !== 'false' && req.body.published !== false,
     likes: 0,
@@ -588,12 +604,12 @@ app.post('/api/products', requireAdmin, productUploadFields, async (req, res) =>
   };
 
   store.products.unshift(product);
-  writeStore(store);
+  await writeStore(store);
   res.status(201).json(product);
 });
 
 app.put('/api/products/:id', requireAdmin, productUploadFields, async (req, res) => {
-  const store = readStore();
+  const store = req._store;
   const idx = store.products.findIndex((p) => p.id === req.params.id);
   if (idx === -1) {
     return res.status(404).json({ error: 'Kreation nicht gefunden.' });
@@ -602,9 +618,7 @@ app.put('/api/products/:id', requireAdmin, productUploadFields, async (req, res)
   const existing = store.products[idx];
   const imgFiles = req.files?.images || [];
   const modelFiles = req.files?.modelFile || [];
-  const uploadedUrls = await Promise.all(
-    imgFiles.map((f) => persistUploadedFile(f, ''))
-  );
+  const uploadedUrls = await Promise.all(imgFiles.map((f) => persistUploadedFile(f, '')));
   const keptImages = parseJsonField(req.body.existingImages, existing.images);
   const combinedImages = [...keptImages, ...uploadedUrls];
 
@@ -616,8 +630,12 @@ app.put('/api/products/:id', requireAdmin, productUploadFields, async (req, res)
     ...existing,
     title: req.body.title !== undefined ? req.body.title.trim() : existing.title,
     subtitle: req.body.subtitle !== undefined ? req.body.subtitle.trim() : existing.subtitle,
-    description: req.body.description !== undefined ? req.body.description.trim() : existing.description,
-    price: req.body.price !== undefined ? Math.max(0.5, parseFloat(req.body.price) || existing.price) : existing.price,
+    description:
+      req.body.description !== undefined ? req.body.description.trim() : existing.description,
+    price:
+      req.body.price !== undefined
+        ? Math.max(0.5, parseFloat(req.body.price) || existing.price)
+        : existing.price,
     compareAtPrice:
       req.body.compareAtPrice !== undefined
         ? req.body.compareAtPrice
@@ -628,14 +646,14 @@ app.put('/api/products/:id', requireAdmin, productUploadFields, async (req, res)
     badge: req.body.badge !== undefined ? req.body.badge.trim() : existing.badge,
     images: combinedImages.length > 0 ? combinedImages : existing.images,
     modelUrl: nextModelUrl,
-    material: req.body.material || existing.material,
+    material: 'PLA',
     colors: parseJsonField(req.body.colors, existing.colors),
     specs: {
       layerHeight: req.body.layerHeight || existing.specs?.layerHeight || '0.16 mm',
       printTime: req.body.printTime || existing.specs?.printTime || '3h 30m',
       dimensions: req.body.dimensions || existing.specs?.dimensions || '120 × 120 × 100 mm',
       weight: req.body.weight || existing.specs?.weight || '110 g',
-      infill: req.body.infill || existing.specs?.infill || '15% Gyroid',
+      infill: req.body.infill || existing.specs?.infill || '15%',
     },
     stockMode: req.body.stockMode || existing.stockMode,
     stockCount:
@@ -654,40 +672,39 @@ app.put('/api/products/:id', requireAdmin, productUploadFields, async (req, res)
   };
 
   store.products[idx] = updated;
-  writeStore(store);
+  await writeStore(store);
   res.json(updated);
 });
 
-app.delete('/api/products/:id', requireAdmin, (req, res) => {
-  const store = readStore();
+app.delete('/api/products/:id', requireAdmin, async (req, res) => {
+  const store = req._store;
   const idx = store.products.findIndex((p) => p.id === req.params.id);
   if (idx === -1) {
     return res.status(404).json({ error: 'Kreation nicht gefunden.' });
   }
   const [removed] = store.products.splice(idx, 1);
-  writeStore(store);
+  await writeStore(store);
   res.json({ deleted: removed.id });
 });
 
-app.post('/api/products/:id/like', (req, res) => {
-  const store = readStore();
+app.post('/api/products/:id/like', async (req, res) => {
+  const store = await readStore();
   const product = store.products.find((p) => p.id === req.params.id);
   if (!product) {
     return res.status(404).json({ error: 'Kreation nicht gefunden.' });
   }
   product.likes = (product.likes || 0) + 1;
-  writeStore(store);
+  await writeStore(store);
   res.json({ id: product.id, likes: product.likes });
 });
 
-// ===================== ORDERS & STRIPE CHECKOUT =====================
-app.get('/api/orders', requireAdmin, (_req, res) => {
-  const store = readStore();
-  res.json(store.orders);
+// ===================== ORDERS =====================
+app.get('/api/orders', requireAdmin, (req, res) => {
+  res.json(req._store.orders);
 });
 
-app.get('/api/orders/:id', (req, res) => {
-  const store = readStore();
+app.get('/api/orders/:id', async (req, res) => {
+  const store = await readStore();
   const target = req.params.id.trim().toUpperCase();
   const order = store.orders.find((o) => o.id.toUpperCase() === target);
   if (!order) {
@@ -705,59 +722,8 @@ app.get('/api/orders/:id', (req, res) => {
   });
 });
 
-async function createStripeCheckoutSession(order, origin) {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  if (!secretKey) return null;
-
-  const params = new URLSearchParams();
-  params.set('mode', 'payment');
-  params.set('customer_email', order.customer.email);
-  params.set('client_reference_id', order.id);
-  params.set('success_url', `${origin}/?stripe_success=1&order_id=${order.id}&session_id={CHECKOUT_SESSION_ID}`);
-  params.set('cancel_url', `${origin}/?stripe_cancel=1&order_id=${order.id}`);
-
-  order.items.forEach((item, idx) => {
-    params.set(`line_items[${idx}][price_data][currency]`, 'eur');
-    params.set(
-      `line_items[${idx}][price_data][product_data][name]`,
-      `${item.title} (${item.colorName} • ${item.sizeOption})`
-    );
-    params.set(
-      `line_items[${idx}][price_data][unit_amount]`,
-      String(Math.round(item.unitPrice * 100))
-    );
-    params.set(`line_items[${idx}][quantity]`, String(item.quantity));
-  });
-
-  if (order.shipping > 0) {
-    const idx = order.items.length;
-    params.set(`line_items[${idx}][price_data][currency]`, 'eur');
-    params.set(`line_items[${idx}][price_data][product_data][name]`, 'DHL Paketversand');
-    params.set(
-      `line_items[${idx}][price_data][unit_amount]`,
-      String(Math.round(order.shipping * 100))
-    );
-    params.set(`line_items[${idx}][quantity]`, '1');
-  }
-
-  const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${secretKey}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: params.toString(),
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error?.message || 'Stripe Session konnte nicht erstellt werden.');
-  }
-  return data;
-}
-
 app.post('/api/orders', async (req, res) => {
-  const store = readStore();
+  const store = await readStore();
   const { customer, items, paymentMethod } = req.body || {};
 
   if (!customer?.name || !customer.name.trim()) {
@@ -770,7 +736,8 @@ app.post('/api/orders', async (req, res) => {
   let subtotal = 0;
   const cleanItems = items.map((item) => {
     const product = store.products.find((p) => p.id === item.productId);
-    const sizeMultiplier = item.sizeOption === 'Groß (+25%)' || item.sizeOption === 'Large (+25%)' ? 1.25 : 1;
+    const sizeMultiplier =
+      item.sizeOption === 'Groß (+25%)' || item.sizeOption === 'Large (+25%)' ? 1.25 : 1;
     const basePrice = product ? product.price : Number(item.unitPrice) || 0;
     const unitPrice = Math.round(basePrice * sizeMultiplier * 100) / 100;
     const quantity = Math.max(1, parseInt(item.quantity, 10) || 1);
@@ -799,9 +766,6 @@ app.post('/api/orders', async (req, res) => {
   const total = Math.round((subtotal + shipping) * 100) / 100;
   const code = `ANO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  const chosenMethod = paymentMethod || 'Bar / PayPal unter Freunden';
-  const isStripeMethod = chosenMethod.toLowerCase().includes('stripe');
-
   const order = {
     id: code,
     customer: {
@@ -814,9 +778,8 @@ app.post('/api/orders', async (req, res) => {
       city: (customer.city || '').trim(),
       notes: (customer.notes || '').trim(),
     },
-    paymentMethod: chosenMethod,
-    paymentStatus: isStripeMethod && isStripeConfigured() ? 'warte_auf_stripe' : 'ausstehend',
-    stripeSessionId: null,
+    paymentMethod: paymentMethod || 'PayPal / Bar',
+    paymentStatus: 'ausstehend',
     items: cleanItems,
     subtotal,
     shipping,
@@ -825,62 +788,19 @@ app.post('/api/orders', async (req, res) => {
     createdAt: new Date().toISOString(),
   };
 
-  let checkoutUrl = null;
-  if (isStripeMethod && isStripeConfigured()) {
-    try {
-      const origin = process.env.PUBLIC_URL || req.headers.origin || `http://localhost:${PORT}`;
-      const session = await createStripeCheckoutSession(order, origin);
-      if (session?.url) {
-        order.stripeSessionId = session.id;
-        checkoutUrl = session.url;
-      }
-    } catch (err) {
-      return res.status(502).json({ error: `Stripe Fehler: ${err.message}` });
-    }
-  }
-
   store.orders.unshift(order);
 
-  // Send / log confirmation email only if an email was provided
   if (order.customer.email && order.customer.email.includes('@')) {
     const mailEntry = await sendOrderConfirmationEmail(order, store.studio);
     store.emailLog = [mailEntry, ...(store.emailLog || [])].slice(0, 60);
   }
 
-  writeStore(store);
-  res.status(201).json({ order, checkoutUrl });
-});
-
-app.get('/api/checkout/verify-stripe', async (req, res) => {
-  const { session_id: sessionId, order_id: orderId } = req.query;
-  const store = readStore();
-  const order = store.orders.find((o) => o.id === orderId);
-  if (!order) {
-    return res.status(404).json({ error: 'Bestellung nicht gefunden.' });
-  }
-
-  if (process.env.STRIPE_SECRET_KEY && sessionId) {
-    try {
-      const stripeRes = await fetch(
-        `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
-        {
-          headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
-        }
-      );
-      const session = await stripeRes.json();
-      if (session.payment_status === 'paid') {
-        order.paymentStatus = 'bezahlt';
-        writeStore(store);
-      }
-    } catch {
-      // keep current status if Stripe unreachable
-    }
-  }
-  res.json(order);
+  await writeStore(store);
+  res.status(201).json({ order, checkoutUrl: null });
 });
 
 app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
-  const store = readStore();
+  const store = req._store;
   const order = store.orders.find((o) => o.id === req.params.id);
   if (!order) {
     return res.status(404).json({ error: 'Bestellung nicht gefunden.' });
@@ -899,18 +819,18 @@ app.patch('/api/orders/:id', requireAdmin, async (req, res) => {
   if (req.body.paymentStatus) {
     order.paymentStatus = req.body.paymentStatus;
   }
-  writeStore(store);
+  await writeStore(store);
   res.json(order);
 });
 
-// ===================== CUSTOM PRINT INQUIRIES (+ STL FILE!) =====================
+// ===================== CUSTOM PRINT INQUIRIES =====================
 const inquiryUploadFields = upload.fields([
   { name: 'referenceImage', maxCount: 1 },
   { name: 'stlFile', maxCount: 1 },
 ]);
 
 app.post('/api/inquiries', inquiryUploadFields, async (req, res) => {
-  const store = readStore();
+  const store = await readStore();
   if (!req.body.name || !req.body.name.trim()) {
     return res.status(400).json({ error: 'Bitte gib kurz deinen Namen ein.' });
   }
@@ -946,24 +866,24 @@ app.post('/api/inquiries', inquiryUploadFields, async (req, res) => {
   };
 
   store.inquiries.unshift(inquiry);
-  writeStore(store);
+  await writeStore(store);
   res.status(201).json(inquiry);
 });
 
-app.patch('/api/inquiries/:id', requireAdmin, (req, res) => {
-  const store = readStore();
+app.patch('/api/inquiries/:id', requireAdmin, async (req, res) => {
+  const store = req._store;
   const inq = store.inquiries.find((i) => i.id === req.params.id);
   if (!inq) {
     return res.status(404).json({ error: 'Anfrage nicht gefunden.' });
   }
   inq.status = req.body.status || inq.status;
-  writeStore(store);
+  await writeStore(store);
   res.json(inq);
 });
 
-// ===================== STUDIO & LEGAL SETTINGS =====================
-app.put('/api/studio', requireAdmin, (req, res) => {
-  const store = readStore();
+// ===================== STUDIO SETTINGS =====================
+app.put('/api/studio', requireAdmin, async (req, res) => {
+  const store = req._store;
   store.studio = {
     ...store.studio,
     ...req.body,
@@ -976,7 +896,7 @@ app.put('/api/studio', requireAdmin, (req, res) => {
       ...(req.body.legal || {}),
     },
   };
-  writeStore(store);
+  await writeStore(store);
   res.json(store.studio);
 });
 
