@@ -9,6 +9,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { generateClientTokenFromReadWriteToken } from '@vercel/blob/client';
 import { buildEnvPinAuth, envPinDigest, getInitialStore, hashPin, verifyPin } from './seed.js';
 import {
   getLanUrls,
@@ -258,7 +259,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 35 * 1024 * 1024 },
+  limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
     const isImage = file.mimetype?.startsWith('image/');
@@ -552,6 +553,99 @@ app.delete('/api/studio/photos/:id', requireAdmin, async (req, res) => {
   res.json({ deleted: req.params.id });
 });
 
+// ===================== DIRECT VERCEL BLOB CLIENT UPLOADS =====================
+// Allows large 3D models (.STL / .3MF up to 150 MB) & high-res photos to upload
+// directly from the browser to Vercel Blob, completely bypassing Vercel's 4.5 MB
+// serverless function body limit (prevents HTTP 413 errors).
+const BLOB_ALLOWED_EXTS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.gif',
+  '.avif',
+  '.stl',
+  '.obj',
+  '.3mf',
+  '.gcode',
+  '.gco',
+  '.bgcode',
+]);
+
+function buildSafeBlobPathname(folder, originalName) {
+  const cleanFolder = String(folder || 'files')
+    .toLowerCase()
+    .replace(/[^a-z0-9/_-]/g, '')
+    .replace(/^\/+|\/+$/g, '') || 'files';
+  const ext = path.extname(originalName || '').toLowerCase();
+  if (!BLOB_ALLOWED_EXTS.has(ext)) {
+    return null;
+  }
+  const stem = path
+    .basename(originalName || 'file', ext)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48) || 'file';
+  const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  return `ano/uploads/${cleanFolder}/${unique}-${stem}${ext}`;
+}
+
+app.post('/api/blob/token', requireAdmin, async (req, res) => {
+  if (!isBlobConfigured()) {
+    return res.json({ directUpload: false });
+  }
+  const { filename, folder } = req.body || {};
+  const pathname = buildSafeBlobPathname(folder || 'products', filename);
+  if (!pathname) {
+    return res.status(400).json({
+      error: 'Dateityp nicht erlaubt (nur Bilder, .STL, .OBJ, .3MF, .GCODE, .BGCODE).',
+    });
+  }
+  try {
+    const clientToken = await generateClientTokenFromReadWriteToken({
+      pathname,
+      maximumSizeInBytes: 150 * 1024 * 1024, // 150 MB max
+      addRandomSuffix: false,
+      validUntil: Date.now() + 10 * 60 * 1000,
+    });
+    res.json({ directUpload: true, clientToken, pathname });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Blob-Token konnte nicht erstellt werden.' });
+  }
+});
+
+app.post('/api/blob/public-token', async (req, res) => {
+  if (!isBlobConfigured()) {
+    return res.json({ directUpload: false });
+  }
+  const { filename } = req.body || {};
+  const pathname = buildSafeBlobPathname('inquiries', filename);
+  if (!pathname) {
+    return res.status(400).json({
+      error: 'Dateityp nicht erlaubt (nur Bilder, .STL, .3MF oder .GCODE).',
+    });
+  }
+  try {
+    const clientToken = await generateClientTokenFromReadWriteToken({
+      pathname,
+      maximumSizeInBytes: 75 * 1024 * 1024, // 75 MB max for friend requests
+      addRandomSuffix: false,
+      validUntil: Date.now() + 5 * 60 * 1000,
+    });
+    res.json({ directUpload: true, clientToken, pathname });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Upload-Token konnte nicht erstellt werden.' });
+  }
+});
+
+function sanitizeUploadedUrl(val) {
+  const s = String(val || '').trim();
+  if (!s) return null;
+  if (s.startsWith('https://') || s.startsWith('/uploads/')) return s;
+  return null;
+}
+
 // ===================== PRODUCTS =====================
 app.get('/api/products', async (_req, res) => {
   const store = await readStore();
@@ -572,7 +666,7 @@ app.post('/api/products', requireAdmin, productUploadFields, async (req, res) =>
   const images = [...uploadedUrls, ...externalUrls];
   const modelUrl = modelFiles[0]
     ? await persistUploadedFile(modelFiles[0], 'models')
-    : null;
+    : sanitizeUploadedUrl(req.body.uploadedModelUrl);
 
   if (!req.body.title || !req.body.title.trim()) {
     return res.status(400).json({ error: 'Bitte gib einen Namen für deine Kreation an.' });
@@ -635,6 +729,8 @@ app.put('/api/products/:id', requireAdmin, productUploadFields, async (req, res)
 
   let nextModelUrl = existing.modelUrl || null;
   if (req.body.removeModel === 'true') nextModelUrl = null;
+  const directModelUrl = sanitizeUploadedUrl(req.body.uploadedModelUrl);
+  if (directModelUrl) nextModelUrl = directModelUrl;
   if (modelFiles[0]) nextModelUrl = await persistUploadedFile(modelFiles[0], 'models');
 
   const updated = {
@@ -862,12 +958,18 @@ app.post('/api/inquiries', inquiryUploadFields, async (req, res) => {
 
   const refImg = req.files?.referenceImage?.[0];
   const stlFile = req.files?.stlFile?.[0];
-  const refUrl = refImg ? await persistUploadedFile(refImg, '') : null;
-  const stlUrl = stlFile ? await persistUploadedFile(stlFile, 'models') : null;
+  const refUrl = refImg
+    ? await persistUploadedFile(refImg, '')
+    : sanitizeUploadedUrl(req.body.uploadedRefImageUrl);
+  const stlUrl = stlFile
+    ? await persistUploadedFile(stlFile, 'models')
+    : sanitizeUploadedUrl(req.body.uploadedStlUrl);
+  const effectiveStlName =
+    stlFile?.originalname || (req.body.uploadedStlName || '').trim() || null;
 
   const autoTitle =
     (req.body.projectTitle || '').trim() ||
-    (stlFile ? stlFile.originalname.replace(/\.stl$/i, '') : '') ||
+    (effectiveStlName ? effectiveStlName.replace(/\.(stl|3mf|gcode|gco|bgcode)$/i, '') : '') ||
     (req.body.stlLink ? '3D-Modell Link' : 'Wunschdruck');
 
   const inquiry = {
@@ -884,7 +986,7 @@ app.post('/api/inquiries', inquiryUploadFields, async (req, res) => {
     budget: (req.body.budget || '').trim(),
     referenceImage: refUrl,
     stlFileUrl: stlUrl,
-    stlFileName: stlFile ? stlFile.originalname : null,
+    stlFileName: effectiveStlName,
     stlMetrics: parseJsonField(req.body.stlMetrics, null),
     status: 'offen',
     createdAt: new Date().toISOString(),

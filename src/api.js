@@ -30,6 +30,12 @@ async function handleResponse(res) {
     if (res.status === 401) {
       setAdminToken('');
     }
+    if (res.status === 413) {
+      throw new Error(
+        data.error ||
+          'Datei zu groß für direkten Server-Upload (413). Bitte Seite neu laden und erneut versuchen.'
+      );
+    }
     throw new Error(data.error || `Request fehlgeschlagen (${res.status})`);
   }
   return data;

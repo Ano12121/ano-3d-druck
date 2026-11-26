@@ -49,6 +49,7 @@ import {
   deleteInquiry,
   updateStudioSettings,
 } from '../api';
+import { optimizeImageFile, uploadFileDirectToBlob } from '../utils/uploadHelper';
 
 const EMPTY_FORM = {
   title: '',
@@ -108,6 +109,7 @@ export default function CreatorStudioModal({
   const [slicerDragOver, setSlicerDragOver] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
   const [error, setError] = useState('');
 
   const [studioDraft, setStudioDraft] = useState(null);
@@ -364,7 +366,60 @@ export default function CreatorStudioModal({
     }
 
     setSaving(true);
+    setUploadStatus('');
     try {
+      // 1. Optimize smartphone photos client-side (fast loads & tiny payloads)
+      let optimizedImages = [];
+      if (newFiles.length > 0) {
+        setUploadStatus('Optimiere Fotos...');
+        optimizedImages = await Promise.all(
+          newFiles.map((file) => optimizeImageFile(file, 1920, 0.86))
+        );
+      }
+
+      // 2. Upload images & large .STL directly to Vercel Blob when Cloud Storage is active
+      //    (bypasses Vercel's 4.5 MB Serverless Function limit — supports .STL up to 150 MB!)
+      let finalExistingImages = [...existingImages];
+      let fallbackImageFiles = [];
+      let directModelUrl = null;
+      let fallbackModelFile = modelFile;
+
+      if (blobConfigured) {
+        if (optimizedImages.length > 0) {
+          const uploadedUrls = [];
+          for (let i = 0; i < optimizedImages.length; i++) {
+            setUploadStatus(`Lädt Foto ${i + 1}/${optimizedImages.length} hoch...`);
+            const url = await uploadFileDirectToBlob(optimizedImages[i], {
+              folder: 'products',
+              admin: true,
+            });
+            if (url) {
+              uploadedUrls.push(url);
+            } else {
+              fallbackImageFiles.push(optimizedImages[i]);
+            }
+          }
+          finalExistingImages = [...uploadedUrls, ...finalExistingImages];
+        }
+
+        if (modelFile) {
+          const sizeMb = (modelFile.size / (1024 * 1024)).toFixed(1);
+          setUploadStatus(`Lädt 3D-Modell hoch (${sizeMb} MB)...`);
+          const url = await uploadFileDirectToBlob(modelFile, {
+            folder: 'models',
+            admin: true,
+            onProgress: (pct) => setUploadStatus(`Lädt 3D-Modell hoch (${pct}%)...`),
+          });
+          if (url) {
+            directModelUrl = url;
+            fallbackModelFile = null;
+          }
+        }
+      } else {
+        fallbackImageFiles = optimizedImages;
+      }
+
+      setUploadStatus('Speichert Kreation...');
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => {
         if (k === 'colors') {
@@ -373,11 +428,12 @@ export default function CreatorStudioModal({
           fd.append(k, String(v));
         }
       });
-      fd.append('existingImages', JSON.stringify(existingImages));
+      fd.append('existingImages', JSON.stringify(finalExistingImages));
       fd.append('slicerMeta', slicerMeta ? JSON.stringify(slicerMeta) : 'null');
       if (removeModel) fd.append('removeModel', 'true');
-      newFiles.forEach((file) => fd.append('images', file));
-      if (modelFile) fd.append('modelFile', modelFile);
+      if (directModelUrl) fd.append('uploadedModelUrl', directModelUrl);
+      fallbackImageFiles.forEach((file) => fd.append('images', file));
+      if (fallbackModelFile) fd.append('modelFile', fallbackModelFile);
 
       if (editingId) {
         await updateProduct(editingId, fd);
@@ -393,6 +449,7 @@ export default function CreatorStudioModal({
       setError(err.message || 'Fehler beim Speichern.');
     } finally {
       setSaving(false);
+      setUploadStatus('');
     }
   };
 
@@ -1288,7 +1345,7 @@ export default function CreatorStudioModal({
                   <CheckCircle2 className="w-4 h-4" />
                   <span>
                     {saving
-                      ? 'Wird gespeichert...'
+                      ? uploadStatus || 'Wird gespeichert...'
                       : editingId
                       ? 'Änderungen speichern'
                       : 'Jetzt im Shop veröffentlichen'}

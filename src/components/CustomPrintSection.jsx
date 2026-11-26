@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { FILAMENTS, formatEUR } from '../data/filaments';
 import { createInquiry } from '../api';
+import { optimizeImageFile, uploadFileDirectToBlob } from '../utils/uploadHelper';
 
 const ModelViewer3D = lazy(() => import('./ModelViewer3D'));
 
@@ -78,8 +79,7 @@ export default function CustomPrintSection({ onInquiryCreated }) {
         const parsed = await parseSlicerFile(picked);
         setSlicerParsed(parsed);
         setParsedStl(null);
-        // Only attach raw file upload when within safe serverless limit (<= 3.8 MB); metadata + preview always sent!
-        setStlFile(picked.size <= 3.8 * 1024 * 1024 ? picked : null);
+        setStlFile(picked);
         setImageFile(parsed.thumbnailFile || null);
         setImagePreview(parsed.thumbnailUrl || null);
         setEstimate({
@@ -140,8 +140,32 @@ export default function CustomPrintSection({ onInquiryCreated }) {
         fd.append('dimensions', estimate.dimensionsText);
         fd.append('stlMetrics', JSON.stringify(estimate));
       }
-      if (imageFile) fd.append('referenceImage', imageFile);
-      if (stlFile) fd.append('stlFile', stlFile);
+
+      if (imageFile) {
+        const optImg = await optimizeImageFile(imageFile, 1600, 0.85);
+        const directImgUrl = await uploadFileDirectToBlob(optImg, {
+          folder: 'inquiries',
+          admin: false,
+        }).catch(() => null);
+        if (directImgUrl) {
+          fd.append('uploadedRefImageUrl', directImgUrl);
+        } else {
+          fd.append('referenceImage', optImg);
+        }
+      }
+
+      if (stlFile) {
+        const directStlUrl = await uploadFileDirectToBlob(stlFile, {
+          folder: 'inquiries',
+          admin: false,
+        }).catch(() => null);
+        if (directStlUrl) {
+          fd.append('uploadedStlUrl', directStlUrl);
+          fd.append('uploadedStlName', stlFile.name);
+        } else {
+          fd.append('stlFile', stlFile);
+        }
+      }
 
       const created = await createInquiry(fd);
       onInquiryCreated(created);

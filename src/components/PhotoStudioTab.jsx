@@ -26,6 +26,7 @@ import {
   deleteStudioPhoto,
 } from '../api';
 import { renderLocalStudioLook } from '../utils/localStudioFilter';
+import { optimizeImageFile } from '../utils/uploadHelper';
 
 const STYLE_PRESETS = [
   {
@@ -167,8 +168,9 @@ export default function PhotoStudioTab({
     setError('');
     setBusyMode(mode);
     try {
+      const optimizedRaw = await optimizeImageFile(rawFile, 1600, 0.88);
       const fd = new FormData();
-      fd.append('rawPhoto', rawFile);
+      fd.append('rawPhoto', optimizedRaw);
       fd.append('title', title || 'Mein 3D-Druck');
       fd.append('style', style);
       fd.append('colorOverride', colorOverride);
@@ -201,9 +203,12 @@ export default function PhotoStudioTab({
     setError('');
     setBusyMode('local');
     try {
-      const styledFile = await renderLocalStudioLook(rawFile, style);
+      const [optimizedRaw, styledFile] = await Promise.all([
+        optimizeImageFile(rawFile, 1600, 0.88),
+        renderLocalStudioLook(rawFile, style),
+      ]);
       const fd = new FormData();
-      fd.append('originalPhoto', rawFile);
+      fd.append('originalPhoto', optimizedRaw);
       fd.append('styledPhoto', styledFile);
       fd.append('title', title || 'Mein 3D-Druck');
       fd.append('style', style);
