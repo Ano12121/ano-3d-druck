@@ -497,7 +497,7 @@ export default function App() {
             </div>
             <div>
               <span className="font-display font-bold text-base tracking-wider text-white">
-                {studio?.brandName || 'LAYERLAB'}
+                {studio?.brandName || 'Ano'}
               </span>
               <span className="block text-[11px] font-mono text-[#7D8596]">
                 100% PLA 3D-Drucke • Frisch vom Druckbett

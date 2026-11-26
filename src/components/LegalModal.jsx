@@ -5,7 +5,7 @@ export default function LegalModal({ activeTab, studio, onChangeTab, onClose }) 
   if (!activeTab) return null;
 
   const legal = studio?.legal || {};
-  const brand = studio?.brandName || 'LAYERLAB';
+  const brand = studio?.brandName || 'Ano';
 
   const tabs = [
     { id: 'impressum', label: 'Impressum', icon: Scale },

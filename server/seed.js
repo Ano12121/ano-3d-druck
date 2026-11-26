@@ -26,8 +26,8 @@ export function getInitialStore() {
       isDefaultPin: !process.env.ADMIN_PIN,
     },
     studio: {
-      brandName: 'LAYERLAB',
-      tagline: '3D-DRUCK STUDIO // 100% PLA',
+      brandName: 'Ano',
+      tagline: '3D-DRUCK // 100% PLA',
       announcement: '100% PLA 3D-Drucke • Such dir was aus oder schick mir einfach dein Wunsch-Modell',
       printerStatus: {
         active: true,
@@ -40,7 +40,7 @@ export function getInitialStore() {
         remaining: '1h 18m',
       },
       legal: {
-        ownerName: 'LAYERLAB 3D-Druck',
+        ownerName: 'Ano 3D-Druck',
         street: '',
         postalCity: '',
         country: 'Deutschland',
@@ -234,7 +234,7 @@ export function getInitialStore() {
     ],
     orders: [
       {
-        id: 'LL-2026-4819',
+        id: 'ANO-2026-4819',
         customer: {
           name: 'Lukas',
           contact: 'WhatsApp',

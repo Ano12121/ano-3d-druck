@@ -27,7 +27,7 @@ export default function Navbar({
             </div>
             <div className="leading-none">
               <div className="font-display font-bold text-lg tracking-wider text-white flex items-center gap-1.5 whitespace-nowrap">
-                {studio?.brandName || 'LAYERLAB'}
+                {studio?.brandName || 'Ano'}
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-[#FF7326] border border-[#FF5500]/30">
                   3D
                 </span>

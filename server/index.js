@@ -98,6 +98,11 @@ function migrateStore(store) {
     store.studio = { ...defaults.studio, ...store.studio, legal: defaults.studio.legal };
     changed = true;
   }
+  if (store.studio?.brandName === 'LAYERLAB') {
+    store.studio.brandName = 'Ano';
+    store.studio.tagline = '3D-DRUCK // 100% PLA';
+    changed = true;
+  }
   if (store.studio?.printerStatus?.material === 'PLA Matte Obsidian') {
     store.studio.printerStatus.material = 'Matt-Schwarz (PLA Matte)';
     changed = true;
@@ -761,7 +766,7 @@ app.post('/api/orders', async (req, res) => {
   const wantsShipping = customer.deliveryMode === 'Versand';
   const shipping = wantsShipping ? (subtotal >= 50 ? 0 : 4.9) : 0;
   const total = Math.round((subtotal + shipping) * 100) / 100;
-  const code = `LL-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const code = `ANO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
   const chosenMethod = paymentMethod || 'Bar / PayPal unter Freunden';
   const isStripeMethod = chosenMethod.toLowerCase().includes('stripe');
@@ -959,7 +964,7 @@ if (!IS_VERCEL && fs.existsSync(DIST_DIR)) {
 
 if (!IS_VERCEL) {
   app.listen(PORT, () => {
-    console.log(`LAYERLAB API Server läuft auf http://localhost:${PORT}`);
+    console.log(`Ano 3D API Server läuft auf http://localhost:${PORT}`);
   });
 }
 

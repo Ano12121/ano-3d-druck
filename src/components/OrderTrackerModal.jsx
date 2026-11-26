@@ -73,7 +73,7 @@ export default function OrderTrackerModal({ open, initialCode, onClose }) {
             <input
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="Bestellnummer eingeben (z.B. LL-2026-4819)"
+              placeholder="Bestellnummer eingeben (z.B. ANO-2026-4819)"
               className="flex-1 px-4 py-2.5 rounded-xl bg-[#0C0E13] border border-white/[0.12] focus:border-[#FF5500] focus:outline-none font-mono text-sm text-white uppercase"
             />
             <button
@@ -91,12 +91,12 @@ export default function OrderTrackerModal({ open, initialCode, onClose }) {
             <button
               type="button"
               onClick={() => {
-                setCode('LL-2026-4819');
-                runLookup('LL-2026-4819');
+                setCode('ANO-2026-4819');
+                runLookup('ANO-2026-4819');
               }}
               className="px-2.5 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.12] font-mono text-[#38BDF8] cursor-pointer"
             >
-              LL-2026-4819
+              ANO-2026-4819
             </button>
           </div>
 

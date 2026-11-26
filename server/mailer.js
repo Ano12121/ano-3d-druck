@@ -35,7 +35,7 @@ export async function dispatchStudioEmail({ to, subject, text, html, type }) {
   const from =
     process.env.SMTP_FROM ||
     process.env.SMTP_USER ||
-    'LAYERLAB 3D-Studio <no-reply@layerlab.local>';
+    'Ano 3D-Druck <no-reply@ano-3d.local>';
 
   const entry = {
     id: `MAIL-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -67,7 +67,7 @@ export async function dispatchStudioEmail({ to, subject, text, html, type }) {
 }
 
 export async function sendOrderConfirmationEmail(order, studio) {
-  const brand = studio?.brandName || 'LAYERLAB';
+  const brand = studio?.brandName || 'Ano';
   const itemLines = order.items
     .map(
       (i) =>
@@ -112,7 +112,7 @@ export async function sendOrderConfirmationEmail(order, studio) {
 }
 
 export async function sendOrderStatusEmail(order, studio) {
-  const brand = studio?.brandName || 'LAYERLAB';
+  const brand = studio?.brandName || 'Ano';
   const label = STATUS_LABELS[order.status] || order.status;
   const subject = `${brand}: Update zu deinem 3D-Druck ${order.id} — ${label}`;
   const text = `Hallo ${order.customer.name},\n\nes gibt Neuigkeiten zu deinem Auftrag ${order.id}!\nNeuer Status: ${label}\n\nDu kannst den aktuellen Fortschritt jederzeit mit deinem Code ${order.id} im Shop ansehen.\n\nViele Grüße,\n${brand}`;
